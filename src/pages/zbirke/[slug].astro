@@ -1,0 +1,91 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { COLLECTIONS_BY_SLUG } from '../../lib/collections';
+import { supabase, SOURCE_LABELS } from '../../lib/supabase';
+import ResultCard from '../../components/ResultCard.astro';
+
+const { slug } = Astro.params;
+const col = slug ? COLLECTIONS_BY_SLUG[slug] : null;
+if (!col) {
+  return new Response('Zbirka nije pronađena', { status: 404 });
+}
+
+// Build query based on collection filter
+let query = supabase.from('archive_results_public').select('*', { count: 'exact' });
+
+if (col.filter.sources?.length) {
+  query = query.in('source', col.filter.sources);
+}
+if (col.filter.locations?.length) {
+  query = query.in('location', col.filter.locations);
+}
+if (col.filter.yearMin !== undefined) {
+  query = query.gte('date_year_min', col.filter.yearMin);
+}
+if (col.filter.yearMax !== undefined) {
+  query = query.lte('date_year_max', col.filter.yearMax);
+}
+if (col.filter.qLike?.length) {
+  const ors = col.filter.qLike.flatMap((p) => [`title.ilike.%${p}%`, `snippet.ilike.%${p}%`]).join(',');
+  query = query.or(ors);
+}
+
+query = query
+  .order('date_year_min', { ascending: true, nullsFirst: false })
+  .range(0, 49);
+
+const { data: results, count } = await query;
+const total = count ?? 0;
+
+// Source breakdown
+const bySrc: Record<string, number> = {};
+for (const r of results ?? []) {
+  bySrc[r.source] = (bySrc[r.source] ?? 0) + 1;
+}
+---
+<Layout title={`${col.title} — Arhiva Ulcinj`} description={col.description}>
+  <article class="max-w-5xl mx-auto px-4 py-8">
+
+    <nav class="text-sm font-sans mb-4 text-ink/60">
+      <a href="/" class="hover:text-venetian">← Pretraga</a> ·
+      <a href="/zbirke" class="hover:text-venetian">Zbirke</a> ·
+      <span>{col.title}</span>
+    </nav>
+
+    <header class="mb-6 pb-6 border-b-2 border-gold/40">
+      <div class="flex items-start gap-4">
+        <span class="text-5xl">{col.emoji}</span>
+        <div class="flex-1">
+          <h1 class="text-3xl md:text-4xl font-semibold leading-tight">{col.title}</h1>
+          <p class="text-lg text-ink/70 mt-2 font-sans leading-relaxed">{col.description}</p>
+          {col.highlight && (
+            <p class="mt-4 italic text-ink/80 leading-relaxed border-l-4 border-gold/40 pl-4">{col.highlight}</p>
+          )}
+        </div>
+      </div>
+    </header>
+
+    <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+      <p class="font-sans text-sm">
+        <strong class="text-2xl text-venetian">{total}</strong>
+        <span class="text-ink/60">izvora · </span>
+        {Object.entries(bySrc).map(([src, n]) => (
+          <span class="ml-2 px-2 py-0.5 bg-white/60 border border-gold/40 rounded text-xs">
+            {SOURCE_LABELS[src] ?? src}: {n}
+          </span>
+        ))}
+      </p>
+      <a href={`/api/export.csv?collection=${col.slug}`} class="text-sm font-sans text-venetian hover:underline">
+        ⬇ Export CSV
+      </a>
+    </div>
+
+    {results && results.length > 0 ? (
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {results.map((r) => <ResultCard rec={r} />)}
+      </div>
+    ) : (
+      <p class="text-center text-ink/60 py-12 font-sans">Nema rezultata u ovoj zbirci. (Možda treba sledeći weekly harvest da popuni novu građu.)</p>
+    )}
+  </article>
+</Layout>

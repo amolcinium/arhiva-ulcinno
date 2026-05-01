@@ -1,0 +1,29 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { COLLECTIONS } from '../../lib/collections';
+---
+<Layout title="Zbirke — Arhiva Ulcinj" description="Kurirane tematske zbirke izvora o Ulcinju, mletačkoj Albaniji, antičkom Olciniumu, Bojani i okolnim lokacijama.">
+  <section class="max-w-5xl mx-auto px-4 py-12">
+    <h1 class="text-3xl font-semibold mb-2">Zbirke</h1>
+    <p class="text-ink/70 mb-8 font-sans">
+      Kurirane tematske zbirke — svaka okuplja izvore o određenom periodu, lokaciji ili temi.
+      Kliknite zbirku za sve relevantne dokumente.
+    </p>
+
+    <div class="grid md:grid-cols-2 gap-5">
+      {COLLECTIONS.map((c) => (
+        <a href={`/zbirke/${c.slug}`} class="group p-6 border border-gold/40 rounded-sm bg-white/40 hover:bg-white/80 hover:border-venetian transition shadow-sm hover:shadow-md">
+          <div class="flex items-start gap-3">
+            <span class="text-3xl">{c.emoji}</span>
+            <div class="flex-1">
+              <h3 class="text-lg font-semibold font-serif group-hover:text-venetian">
+                {c.title} <span class="text-venetian">→</span>
+              </h3>
+              <p class="text-sm text-ink/70 mt-1 font-sans leading-relaxed">{c.description}</p>
+            </div>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+</Layout>
