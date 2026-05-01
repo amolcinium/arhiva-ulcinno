@@ -343,6 +343,164 @@ async def search_digivatlib(session, query: str, limit: int = 30) -> list[Record
     return out
 
 
+# ---------- connector: BnF Gallica (France) ----------
+
+async def search_gallica(session, query: str, limit: int = 30) -> list[Record]:
+    """BnF Gallica SRU search — French national library (kartografija, putopisi, italijanski/franc. izvori o Jadranu)."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    out: list[Record] = []
+    for term in terms:
+        sru_query = f'dc.title all "{term}" or dc.subject all "{term}"'
+        url = "https://gallica.bnf.fr/SRU"
+        params = {
+            "operation": "searchRetrieve",
+            "version": "1.2",
+            "query": sru_query,
+            "maximumRecords": limit // max(len(terms), 1) + 2,
+            "recordSchema": "dublincore",
+        }
+        text = await fetch_text(session, url, params)
+        if not text:
+            continue
+        # Parse XML — extract dc:title, dc:creator, dc:date, dc:identifier
+        records = re.findall(r'<srw:record>(.*?)</srw:record>', text, re.S)
+        for rxml in records:
+            title_m = re.search(r'<dc:title[^>]*>(.*?)</dc:title>', rxml, re.S)
+            creator_m = re.search(r'<dc:creator[^>]*>(.*?)</dc:creator>', rxml, re.S)
+            date_m = re.search(r'<dc:date[^>]*>(.*?)</dc:date>', rxml, re.S)
+            id_m = re.search(r'<dc:identifier[^>]*>(https?://gallica\.bnf\.fr/[^<]+)</dc:identifier>', rxml)
+            desc_m = re.search(r'<dc:description[^>]*>(.*?)</dc:description>', rxml, re.S)
+            lang_m = re.search(r'<dc:language[^>]*>(.*?)</dc:language>', rxml, re.S)
+            if not id_m or not title_m:
+                continue
+            url_orig = id_m.group(1).strip()
+            ark_id = re.search(r'(ark:[^/]+/[^/]+)', url_orig)
+            source_id = ark_id.group(1) if ark_id else url_orig.rsplit('/', 1)[-1]
+            ymin, ymax = parse_year_range(date_m.group(1) if date_m else "")
+            iiif = ""
+            if "ark:" in url_orig:
+                iiif = url_orig.replace("https://gallica.bnf.fr/", "https://gallica.bnf.fr/iiif/") + "/manifest.json" if "/manifest" not in url_orig else url_orig
+            rec = Record(
+                source="gallica",
+                source_id=source_id,
+                title=title_m.group(1).strip()[:300],
+                author=(creator_m.group(1).strip() if creator_m else "")[:200],
+                date_text=(date_m.group(1).strip() if date_m else "")[:50],
+                date_year_min=ymin,
+                date_year_max=ymax,
+                url_original=url_orig,
+                url_iiif=iiif,
+                snippet=(desc_m.group(1).strip() if desc_m else "")[:400],
+                doc_type="book",
+                language=(lang_m.group(1).strip() if lang_m else "fr")[:10],
+                metadata={"matched_term": term, "institution": "BnF"},
+            )
+            out.append(rec)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+# ---------- connector: Library of Congress (USA) ----------
+
+async def search_loc(session, query: str, limit: int = 30) -> list[Record]:
+    """Library of Congress JSON search — američka kongresna biblioteka, ima dosta mapa i putopisa o Jadranu."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    out: list[Record] = []
+    for term in terms:
+        url = "https://www.loc.gov/search/"
+        params = {"q": term, "fo": "json", "c": str(limit // max(len(terms), 1) + 2)}
+        data = await fetch_json(session, url, params)
+        if not data:
+            continue
+        for item in data.get("results", []):
+            title = item.get("title", "")
+            if isinstance(title, list):
+                title = title[0] if title else ""
+            url_orig = item.get("url") or item.get("id", "")
+            if not url_orig or not title:
+                continue
+            date_raw = item.get("date") or ""
+            ymin, ymax = parse_year_range(str(date_raw))
+            thumb = ""
+            if isinstance(item.get("image_url"), list) and item["image_url"]:
+                thumb = item["image_url"][0]
+            elif isinstance(item.get("image_url"), str):
+                thumb = item["image_url"]
+            descs = item.get("description") or []
+            snippet = (descs[0] if isinstance(descs, list) and descs else str(descs))[:400]
+            iiif = ""
+            if isinstance(item.get("resources"), list) and item["resources"]:
+                for res in item["resources"]:
+                    if isinstance(res, dict) and "iiif_manifest" in res:
+                        iiif = res["iiif_manifest"]
+                        break
+            rec = Record(
+                source="loc",
+                source_id=str(item.get("id", url_orig.rsplit("/", 1)[-1])),
+                title=str(title)[:300],
+                date_text=str(date_raw)[:50],
+                date_year_min=ymin,
+                date_year_max=ymax,
+                url_original=url_orig,
+                url_iiif=iiif,
+                thumbnail_url=thumb,
+                snippet=snippet,
+                doc_type=str(item.get("original_format", [""])[0] if isinstance(item.get("original_format"), list) else "")[:50],
+                language=str((item.get("language") or [""])[0] if isinstance(item.get("language"), list) else "")[:10],
+                metadata={"matched_term": term, "institution": "Library of Congress"},
+            )
+            out.append(rec)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+# ---------- connector: Wellcome Collection (UK) ----------
+
+async def search_wellcome(session, query: str, limit: int = 20) -> list[Record]:
+    """Wellcome Collection (London) — putopisi, antropologija, medicina XIX vijeka. Manji yield ali kvalitetan."""
+    url = "https://api.wellcomecollection.org/catalogue/v2/works"
+    # Wellcome supports OR in single query
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:6]
+    qstr = " OR ".join(terms)
+    params = {"query": qstr, "pageSize": limit, "include": "images,production"}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("results", []):
+        wid = item.get("id", "")
+        title = item.get("title", "")
+        if not wid or not title:
+            continue
+        prod = item.get("production", [])
+        date_raw = ""
+        ymin = ymax = None
+        if prod and isinstance(prod, list) and prod[0].get("dates"):
+            d = prod[0]["dates"][0]
+            date_raw = d.get("label", "")
+            ymin, ymax = parse_year_range(date_raw)
+        thumb = ""
+        if item.get("thumbnail"):
+            thumb = item["thumbnail"].get("url", "")
+        rec = Record(
+            source="wellcome",
+            source_id=wid,
+            title=title[:300],
+            date_text=date_raw[:50],
+            date_year_min=ymin,
+            date_year_max=ymax,
+            url_original=f"https://wellcomecollection.org/works/{wid}",
+            thumbnail_url=thumb,
+            snippet=(item.get("description") or "")[:400],
+            doc_type=(item.get("workType") or {}).get("label", "") if isinstance(item.get("workType"), dict) else "",
+            metadata={"institution": "Wellcome Collection", "iiif_present": bool(item.get("images"))},
+        )
+        out.append(rec)
+    return out
+
+
 # ---------- connector: Pelagios Pleiades (ancient places) ----------
 
 async def search_pelagios(session, query: str, limit: int = 30) -> list[Record]:
@@ -513,6 +671,9 @@ CONNECTORS = {
     "internet_archive": search_internet_archive,
     "pelagios": search_pelagios,
     "wikidata": search_wikidata,
+    "gallica": search_gallica,
+    "loc": search_loc,
+    "wellcome": search_wellcome,
     "digivatlib": search_digivatlib,
     "antenati": search_antenati,
     "edr": search_edr,
