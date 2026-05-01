@@ -1,14 +1,15 @@
 ---
 import { SOURCE_LABELS, type ArchiveResult } from '../lib/supabase';
-interface Props { rec: ArchiveResult }
-const { rec } = Astro.props;
+interface Props { rec: ArchiveResult; q?: string }
+const { rec, q = '' } = Astro.props;
 const sourceLabel = SOURCE_LABELS[rec.source] ?? rec.source;
 const dateLabel = rec.date_text ?? (rec.date_year_min ? `${rec.date_year_min}${rec.date_year_max && rec.date_year_max !== rec.date_year_min ? `–${rec.date_year_max}` : ''}` : null);
+const detailUrl = `/item/${rec.id}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
 ---
-<article class="border border-gold/40 rounded-sm bg-white/40 hover:bg-white/70 transition p-5 flex flex-col gap-2">
+<article class="border border-gold/40 rounded-sm bg-white/40 hover:bg-white/80 hover:border-venetian transition p-5 flex flex-col gap-2 cursor-pointer group" onclick={`window.location='${detailUrl}'`}>
   <div class="flex items-start justify-between gap-3">
     <h3 class="text-lg font-semibold leading-tight">
-      <a href={rec.url_original} target="_blank" rel="noopener" class="hover:text-venetian">
+      <a href={detailUrl} class="group-hover:text-venetian">
         {rec.title}
       </a>
     </h3>
@@ -22,22 +23,11 @@ const dateLabel = rec.date_text ?? (rec.date_year_min ? `${rec.date_year_min}${r
     {rec.location && <span class="px-2 py-0.5 bg-ottoman/10 text-ottoman rounded">📍 {rec.location}</span>}
     {rec.doc_type && <span class="px-2 py-0.5 bg-gold/20 rounded">{rec.doc_type}</span>}
     {rec.language && <span class="px-2 py-0.5 bg-ink/10 rounded">{rec.language}</span>}
+    {rec.url_iiif && <span class="px-2 py-0.5 bg-ottoman/20 text-ottoman rounded text-[10px]">🔍 IIIF</span>}
   </div>
   {rec.author && <p class="text-sm italic text-ink/70">{rec.author}</p>}
   {rec.snippet && <p class="text-sm text-ink/80 line-clamp-3">{rec.snippet}</p>}
-  <div class="flex flex-wrap gap-3 text-xs font-sans pt-1">
-    <a href={rec.url_original} target="_blank" rel="noopener" class="text-venetian hover:underline">Otvori original →</a>
-    {rec.url_iiif && (
-      <>
-        <a
-          href={`https://projectmirador.org/embed/?iiif-content=${encodeURIComponent(rec.url_iiif)}`}
-          target="_blank"
-          rel="noopener"
-          class="text-ottoman hover:underline"
-          title="Otvara Mirador viewer sa zoom, listanjem strana i poređenjem"
-        >🔍 Otvori u Mirador</a>
-        <a href={rec.url_iiif} target="_blank" rel="noopener" class="text-ink/60 hover:underline">IIIF manifest</a>
-      </>
-    )}
+  <div class="flex flex-wrap gap-3 text-xs font-sans pt-1" onclick="event.stopPropagation()">
+    <a href={detailUrl} class="text-venetian hover:underline font-medium">📖 Detalji →</a>
   </div>
 </article>

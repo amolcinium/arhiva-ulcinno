@@ -96,6 +96,41 @@ export async function getMapPoints(): Promise<MapPoint[]> {
     .filter((x): x is MapPoint => x !== null);
 }
 
+export async function getItem(id: string): Promise<ArchiveResult | null> {
+  const { data, error } = await supabase
+    .from('archive_results')
+    .select('id, source, source_id, title, author, date_text, date_year_min, date_year_max, location, language, doc_type, url_original, url_iiif, thumbnail_url, snippet, full_text, tags, fetched_at, metadata, relevance')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as any;
+}
+
+export async function getRelated(item: ArchiveResult, limit = 6): Promise<ArchiveResult[]> {
+  const out: ArchiveResult[] = [];
+  // Strategy: same location first, then same source
+  if (item.location) {
+    const { data } = await supabase
+      .from('archive_results_public')
+      .select('*')
+      .eq('location', item.location)
+      .neq('id', item.id)
+      .limit(limit);
+    if (data) out.push(...(data as any[]));
+  }
+  if (out.length < limit) {
+    const { data } = await supabase
+      .from('archive_results_public')
+      .select('*')
+      .eq('source', item.source)
+      .neq('id', item.id)
+      .not('id', 'in', `(${out.map(r => `"${r.id}"`).join(',') || '""'})`)
+      .limit(limit - out.length);
+    if (data) out.push(...(data as any[]));
+  }
+  return out.slice(0, limit);
+}
+
 export async function searchResults(opts: {
   q?: string;
   location?: string;

@@ -1,0 +1,206 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getItem, getRelated, SOURCE_LABELS, LOCATIONS } from '../../lib/supabase';
+
+const { id } = Astro.params;
+const url = new URL(Astro.request.url);
+const q = url.searchParams.get('q') ?? '';
+
+if (!id) {
+  return Astro.redirect('/');
+}
+
+const item = await getItem(id);
+if (!item) {
+  return new Response('Not found', { status: 404 });
+}
+const related = await getRelated(item, 6);
+const sourceLabel = SOURCE_LABELS[item.source] ?? item.source;
+const locationLabel = LOCATIONS.find(l => l.key === item.location)?.label ?? item.location ?? '';
+const dateLabel = item.date_text ?? (item.date_year_min ? `${item.date_year_min}${item.date_year_max && item.date_year_max !== item.date_year_min ? `–${item.date_year_max}` : ''}` : null);
+
+// Highlight helper: wraps query terms in <mark>
+function highlight(text: string | null | undefined, terms: string[]): string {
+  if (!text) return '';
+  let out = text;
+  // Sort by length desc so longer matches replace first
+  const sorted = [...new Set(terms.filter(t => t.length >= 3))].sort((a, b) => b.length - a.length);
+  for (const term of sorted) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="bg-gold/40 px-0.5 rounded">$1</mark>');
+  }
+  return out;
+}
+
+// Build query terms: the search query + location variants
+const queryTerms = q ? q.split(/\s+/).filter(t => t.length >= 3) : [];
+if (item.location) queryTerms.push(item.location);
+
+const highlightedTitle = highlight(item.title, queryTerms);
+const highlightedSnippet = highlight(item.snippet, queryTerms);
+const highlightedFullText = highlight(item.full_text, queryTerms);
+
+const hasIiif = !!item.url_iiif;
+const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${encodeURIComponent(item.url_iiif!)}` : '';
+---
+<Layout title={`${item.title.slice(0, 80)} — Arhiva Ulcinj`} description={item.snippet ?? `${item.title} · izvor: ${sourceLabel}`}>
+  <article class="max-w-5xl mx-auto px-4 py-8">
+
+    <nav class="text-sm font-sans mb-4 text-ink/60">
+      <a href="/" class="hover:text-venetian">← Pretraga</a>
+      {q && <> · <a href={`/?q=${encodeURIComponent(q)}`} class="hover:text-venetian">"{q}"</a></>}
+      {item.location && <> · <a href={`/?location=${item.location}`} class="hover:text-venetian">{locationLabel}</a></>}
+      <> · <span>{sourceLabel}</span></>
+    </nav>
+
+    <header class="mb-6 pb-6 border-b-2 border-gold/40">
+      <div class="flex flex-wrap gap-2 mb-3 text-xs font-sans">
+        <span class="px-2 py-0.5 bg-venetian/10 text-venetian rounded font-medium">{sourceLabel}</span>
+        {dateLabel && <span class="px-2 py-0.5 bg-ink/10 rounded">{dateLabel}</span>}
+        {locationLabel && <span class="px-2 py-0.5 bg-ottoman/10 text-ottoman rounded">📍 {locationLabel}</span>}
+        {item.doc_type && <span class="px-2 py-0.5 bg-gold/20 rounded">{item.doc_type}</span>}
+        {item.language && <span class="px-2 py-0.5 bg-ink/10 rounded">{item.language}</span>}
+      </div>
+      <h1 class="text-3xl md:text-4xl font-semibold leading-tight" set:html={highlightedTitle}></h1>
+      {item.author && <p class="mt-2 text-lg italic text-ink/70" set:html={highlight(item.author, queryTerms)}></p>}
+    </header>
+
+    <div class="grid md:grid-cols-3 gap-8">
+
+      <div class="md:col-span-2 space-y-6">
+        {item.thumbnail_url && (
+          <img src={item.thumbnail_url} alt={item.title} loading="lazy"
+               class="max-w-full md:max-w-md border-2 border-gold/40 rounded-sm shadow-md" />
+        )}
+
+        {item.snippet && (
+          <section>
+            <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-2">Opis</h2>
+            <p class="text-lg leading-relaxed" set:html={highlightedSnippet}></p>
+          </section>
+        )}
+
+        {item.full_text && (
+          <section>
+            <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-2">Tekst (transkripcija)</h2>
+            <pre class="text-sm font-mono whitespace-pre-wrap leading-relaxed bg-white/40 p-4 border border-gold/40 rounded-sm" set:html={highlightedFullText}></pre>
+          </section>
+        )}
+
+        {hasIiif && (
+          <section>
+            <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-2">IIIF Viewer</h2>
+            <div class="aspect-video border-2 border-gold/40 rounded-sm overflow-hidden bg-ink/5">
+              <iframe
+                src={miradorUrl}
+                title={`Mirador viewer for ${item.title}`}
+                class="w-full h-full"
+                allowfullscreen
+                loading="lazy"
+              ></iframe>
+            </div>
+            <p class="text-xs font-sans text-ink/60 mt-2">
+              Mirador omogućava zoom, listanje strana, i side-by-side poređenje sa drugim IIIF dokumentima.
+              <a href={miradorUrl} target="_blank" rel="noopener" class="text-venetian hover:underline ml-2">Otvori full-screen ↗</a>
+            </p>
+          </section>
+        )}
+
+        <section class="flex flex-wrap gap-3 pt-4 border-t border-gold/40">
+          <a href={item.url_original} target="_blank" rel="noopener"
+             class="px-4 py-2 bg-venetian text-parchment rounded-sm font-sans font-medium hover:bg-venetian/90 transition">
+            Otvori original na {sourceLabel} ↗
+          </a>
+          {item.url_iiif && (
+            <a href={item.url_iiif} target="_blank" rel="noopener"
+               class="px-4 py-2 border border-gold/40 bg-white/40 rounded-sm font-sans hover:bg-white/80 transition">
+              IIIF manifest JSON
+            </a>
+          )}
+          <a href="javascript:history.back()"
+             class="px-4 py-2 border border-gold/40 bg-white/40 rounded-sm font-sans hover:bg-white/80 transition">
+            ← Nazad
+          </a>
+        </section>
+      </div>
+
+      <aside class="space-y-6 font-sans text-sm">
+        <div class="p-4 bg-white/40 border border-gold/40 rounded-sm">
+          <h3 class="text-xs uppercase tracking-wider text-ink/60 mb-3">Detalji</h3>
+          <dl class="space-y-2">
+            <div>
+              <dt class="text-ink/60 text-xs">Izvor</dt>
+              <dd>{sourceLabel}</dd>
+            </div>
+            {dateLabel && (
+              <div>
+                <dt class="text-ink/60 text-xs">Datum</dt>
+                <dd>{dateLabel}</dd>
+              </div>
+            )}
+            {item.author && (
+              <div>
+                <dt class="text-ink/60 text-xs">Autor</dt>
+                <dd>{item.author}</dd>
+              </div>
+            )}
+            {locationLabel && (
+              <div>
+                <dt class="text-ink/60 text-xs">Lokacija</dt>
+                <dd><a href={`/?location=${item.location}`} class="text-venetian hover:underline">{locationLabel}</a></dd>
+              </div>
+            )}
+            {item.language && (
+              <div>
+                <dt class="text-ink/60 text-xs">Jezik</dt>
+                <dd>{item.language}</dd>
+              </div>
+            )}
+            {item.doc_type && (
+              <div>
+                <dt class="text-ink/60 text-xs">Tip dokumenta</dt>
+                <dd>{item.doc_type}</dd>
+              </div>
+            )}
+            {item.tags && item.tags.length > 0 && (
+              <div>
+                <dt class="text-ink/60 text-xs">Tagovi</dt>
+                <dd class="flex flex-wrap gap-1 mt-1">
+                  {item.tags.map((t) => (
+                    <a href={`/?location=${t}`} class="px-2 py-0.5 bg-ink/10 rounded text-xs hover:bg-venetian/10 hover:text-venetian">{t}</a>
+                  ))}
+                </dd>
+              </div>
+            )}
+            <div>
+              <dt class="text-ink/60 text-xs">ID</dt>
+              <dd class="text-xs font-mono break-all">{item.source_id || item.id}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {related.length > 0 && (
+          <div class="p-4 bg-white/40 border border-gold/40 rounded-sm">
+            <h3 class="text-xs uppercase tracking-wider text-ink/60 mb-3">
+              Slični rezultati ({related.length})
+            </h3>
+            <ul class="space-y-3">
+              {related.map((r) => (
+                <li>
+                  <a href={`/item/${r.id}${q ? `?q=${encodeURIComponent(q)}` : ''}`}
+                     class="block hover:text-venetian">
+                    <strong class="text-sm leading-tight block">{r.title.slice(0, 100)}</strong>
+                    <span class="text-xs text-ink/60">
+                      {SOURCE_LABELS[r.source] ?? r.source}
+                      {r.date_text && ` · ${r.date_text}`}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </aside>
+    </div>
+  </article>
+</Layout>

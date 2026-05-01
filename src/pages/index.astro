@@ -94,7 +94,7 @@ const totalPages = Math.ceil(total / limit);
       {error && <p class="text-venetian">⚠️ {error} — provjeri da li je Supabase migracija primijenjena.</p>}
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {results.map((rec) => <ResultCard rec={rec} />)}
+        {results.map((rec) => <ResultCard rec={rec} q={q} />)}
       </div>
 
       {results.length === 0 && !error && (
