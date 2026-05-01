@@ -343,6 +343,205 @@ async def search_digivatlib(session, query: str, limit: int = 30) -> list[Record
     return out
 
 
+# ---------- connector: CrossRef (academic articles) ----------
+
+async def search_crossref(session, query: str, limit: int = 20) -> list[Record]:
+    """CrossRef — academic literature index. Finds journal articles, book chapters mentioning Ulcinj/Olcinium."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:6]
+    qstr = " ".join(terms)
+    url = "https://api.crossref.org/works"
+    params = {"query": qstr, "rows": limit, "select": "DOI,title,author,published-print,published-online,abstract,publisher,type,subject,URL,container-title"}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("message", {}).get("items", []):
+        doi = item.get("DOI", "")
+        title = item.get("title", [""])[0] if item.get("title") else ""
+        if not doi or not title:
+            continue
+        authors_list = item.get("author", []) or []
+        authors = ", ".join(f"{a.get('given','')} {a.get('family','')}".strip() for a in authors_list[:3])
+        date_parts = (item.get("published-print", {}) or item.get("published-online", {}) or {}).get("date-parts", [[None]])
+        ymin = date_parts[0][0] if date_parts and date_parts[0] else None
+        # Strip JATS XML tags from abstract
+        abstract = item.get("abstract", "")
+        if abstract:
+            abstract = re.sub(r"<[^>]+>", "", abstract).strip()
+        container = item.get("container-title", [""])[0] if item.get("container-title") else ""
+        rec = Record(
+            source="crossref",
+            source_id=doi,
+            title=title[:300],
+            author=authors[:200],
+            date_text=str(ymin) if ymin else "",
+            date_year_min=ymin,
+            date_year_max=ymin,
+            url_original=item.get("URL", f"https://doi.org/{doi}"),
+            snippet=abstract[:1500],
+            doc_type=item.get("type", "article"),
+            metadata={"doi": doi, "publisher": item.get("publisher"), "journal": container},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: Open Library ----------
+
+async def search_openlibrary(session, query: str, limit: int = 20) -> list[Record]:
+    """Open Library — book metadata sister of Internet Archive. Catalogs millions of books."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    url = "https://openlibrary.org/search.json"
+    params = {"q": qstr, "limit": limit, "fields": "key,title,author_name,first_publish_year,subject,publisher,isbn,language,cover_i,ia"}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("docs", []):
+        key = item.get("key", "")
+        title = item.get("title", "")
+        if not key or not title:
+            continue
+        ymin = item.get("first_publish_year")
+        authors = ", ".join(item.get("author_name", [])[:3])
+        subjs = ", ".join(item.get("subject", [])[:5])
+        cover = f"https://covers.openlibrary.org/b/id/{item['cover_i']}-M.jpg" if item.get("cover_i") else ""
+        rec = Record(
+            source="openlibrary",
+            source_id=key.lstrip("/"),
+            title=title[:300],
+            author=authors[:200],
+            date_text=str(ymin) if ymin else "",
+            date_year_min=ymin,
+            date_year_max=ymin,
+            url_original=f"https://openlibrary.org{key}",
+            thumbnail_url=cover,
+            snippet=subjs[:600],
+            doc_type="book",
+            language=", ".join(item.get("language", [])[:3])[:30],
+            metadata={"isbn": item.get("isbn", [None])[0] if item.get("isbn") else None,
+                     "ia_id": item.get("ia", [None])[0] if item.get("ia") else None,
+                     "publisher": ", ".join(item.get("publisher", [])[:2])},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: HathiTrust (US academic library) ----------
+
+async def search_hathitrust(session, query: str, limit: int = 15) -> list[Record]:
+    """HathiTrust — massive US academic digital library. Bibliographic API for catalog records."""
+    # HathiTrust does not have a great free-text search; use OCLC lookup via title
+    # We use their proxied search via babel.hathitrust.org full-text but JSON often blocked
+    # Alternative: search via Internet Archive (which mirrors HathiTrust) is already covered
+    # For now: use bibliographic API with author/title queries
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:3]
+    out: list[Record] = []
+    for term in terms:
+        # HathiTrust public search via Solr endpoint
+        url = "https://catalog.hathitrust.org/Search/Home"
+        params = {"lookfor": term, "type": "all", "format": "json"}
+        text = await fetch_text(session, url, params)
+        if not text:
+            continue
+        # The HTML endpoint won't return JSON; instead try bib metadata endpoint
+        # Skip — yield was minimal in probe
+        break
+    return out  # placeholder; real HathiTrust integration requires their proper API key for searches
+
+
+# ---------- connector: Norwegian National Library (NB.no) ----------
+
+async def search_nb(session, query: str, limit: int = 15) -> list[Record]:
+    """Norwegian National Library — surprisingly has Adriatic-related content (travelogues, cartography)."""
+    url = "https://api.nb.no/catalog/v1/items"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    params = {"q": qstr, "size": limit}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    items = data.get("_embedded", {}).get("items", [])
+    for item in items:
+        md = item.get("metadata", {})
+        title = md.get("title", "")
+        nb_id = item.get("id", "")
+        if not title or not nb_id:
+            continue
+        creators = md.get("creators") or []
+        author = ", ".join(creators[:3]) if isinstance(creators, list) else str(creators)
+        ymin = None
+        date_str = ""
+        for d in [md.get("originiso", ""), md.get("startdate", ""), md.get("originalAvailableDate", "")]:
+            if d:
+                date_str = str(d)
+                m = re.search(r'\b(1[5-9]\d{2}|20\d{2})\b', date_str)
+                if m:
+                    ymin = int(m.group(1))
+                    break
+        thumb = ""
+        if item.get("_links", {}).get("thumbnail_custom", {}).get("href"):
+            thumb = item["_links"]["thumbnail_custom"]["href"]
+        rec = Record(
+            source="nb_no",
+            source_id=nb_id,
+            title=title[:300],
+            author=author[:200],
+            date_text=date_str[:50],
+            date_year_min=ymin,
+            date_year_max=ymin,
+            url_original=item.get("_links", {}).get("presentation", {}).get("href", f"https://www.nb.no/items/{nb_id}"),
+            thumbnail_url=thumb,
+            snippet=(md.get("subjects") and ", ".join(
+                s if isinstance(s, str) else (s.get("label") or s.get("name") or str(s))
+                for s in md["subjects"][:5]
+            ) or "")[:500],
+            doc_type=md.get("mediaType", "")[:50],
+            language=", ".join(md.get("languages", [])[:2])[:30],
+            metadata={"institution": "Norwegian National Library"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: Smithsonian Open Access ----------
+
+async def search_smithsonian(session, query: str, limit: int = 15) -> list[Record]:
+    """Smithsonian Open Access — anthropological/photographic collections. DEMO_KEY OK for low volume."""
+    url = "https://api.si.edu/openaccess/api/v1.0/search"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:4]
+    qstr = " OR ".join(terms)
+    params = {"api_key": "DEMO_KEY", "q": qstr, "rows": limit}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("response", {}).get("rows", []):
+        sid = item.get("id", "")
+        title = item.get("title", "")
+        if not sid or not title:
+            continue
+        content = item.get("content", {})
+        descn = content.get("freetext", {}).get("notes", [])
+        snippet = ""
+        if isinstance(descn, list) and descn:
+            snippet = (descn[0].get("content", "") if isinstance(descn[0], dict) else str(descn[0]))[:500]
+        url_orig = item.get("url", "") or content.get("descriptiveNonRepeating", {}).get("record_link", "")
+        rec = Record(
+            source="smithsonian",
+            source_id=sid,
+            title=title[:300],
+            url_original=url_orig or f"https://collections.si.edu/search/results.htm?q=record_ID:{sid}",
+            snippet=snippet,
+            doc_type=item.get("type", ""),
+            metadata={"unitCode": item.get("unitCode", ""), "institution": "Smithsonian"},
+        )
+        out.append(rec)
+    return out
+
+
 # ---------- connector: BnF Gallica (France) ----------
 
 async def search_gallica(session, query: str, limit: int = 30) -> list[Record]:
@@ -674,6 +873,10 @@ CONNECTORS = {
     "gallica": search_gallica,
     "loc": search_loc,
     "wellcome": search_wellcome,
+    "crossref": search_crossref,
+    "openlibrary": search_openlibrary,
+    "nb_no": search_nb,
+    "smithsonian": search_smithsonian,
     "digivatlib": search_digivatlib,
     "antenati": search_antenati,
     "edr": search_edr,
