@@ -6,6 +6,9 @@ on:
     - cron: '17 4 * * 1'
   workflow_dispatch:  # allow manual trigger from Actions tab
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   harvest:
     runs-on: ubuntu-latest
