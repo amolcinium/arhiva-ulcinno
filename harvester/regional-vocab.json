@@ -1,0 +1,282 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "updated": "2026-05-01",
+    "purpose": "Multi-language historical name dictionary for Ulcinj-region archive search. Each location lists ALL known historical variants (Latin, Greek, Venetian/Italian, Albanian, Slavic, Ottoman, Cyrillic) so federated queries don't miss matches.",
+    "usage": "Each query expands to OR-list of all variants. Add aliases as discovered."
+  },
+
+  "primary_locations": {
+    "ulcinj": {
+      "modern": ["Ulcinj", "Ulqin"],
+      "historical": [
+        "Olcinium", "Olchinium", "Olcynium", "Ulcinium",
+        "Colchinium", "Colchinion",
+        "Dulcigno", "Dolcigno", "Dulcignum",
+        "Ulqini", "Ulqinit",
+        "Ülgün", "Olgun",
+        "Ολκίνιον", "Ολκίνιον",
+        "Улцињ", "Улцин"
+      ],
+      "type": "city",
+      "priority": "primary"
+    },
+
+    "stari_grad_ulcinj": {
+      "modern": ["Stari grad Ulcinj", "Kalaja"],
+      "historical": [
+        "Qyteti i vjetër i Ulqinit",
+        "Cittadella di Dulcigno",
+        "Castello di Dulcigno",
+        "Citadella Olcinii"
+      ],
+      "type": "citadel",
+      "priority": "primary",
+      "notes": "Tvrđava unutar današnjeg Ulcinja, kontinuitet sa antičkim Olciniumom"
+    },
+
+    "stari_ulcinj_kruce": {
+      "modern": ["Stari Ulcinj"],
+      "historical": [
+        "Dulcigno vecchio", "Vecchio Dulcigno", "Dulcigno Vecio",
+        "Olcinium Vetus"
+      ],
+      "type": "ruined_city",
+      "priority": "primary",
+      "location_hint": "kod sela Kruče",
+      "notes": "Zaseban srednjovjekovni grad na obali, prvi pomen 1376; ruševine + crkva XII-XIII vijek; mletački arhivski trag"
+    },
+
+    "kruce": {
+      "modern": ["Kruče", "Krruç"],
+      "historical": ["Krythë", "Krytha", "Krruçi"],
+      "type": "village",
+      "priority": "primary"
+    },
+
+    "valdanos": {
+      "modern": ["Valdanos"],
+      "historical": [
+        "Val da noce", "Val di noce", "Valle delle Noci",
+        "Valdinoce", "Valdanosso"
+      ],
+      "type": "bay",
+      "priority": "primary",
+      "etymology": "Mletačko/italijansko 'dolina oraha' → Valdanos",
+      "notes": "Glavna luka ulcinjskih gusara, mletačke i otomanske brodove"
+    },
+
+    "bojana_buna": {
+      "modern": ["Bojana", "Buna"],
+      "historical": [
+        "Barbana", "Barbanna",
+        "Boiana", "Fiume Boiana",
+        "Бојана", "Буна"
+      ],
+      "type": "river",
+      "priority": "primary",
+      "etymology": "Ilirsko Barbanna → latinsko Barbana → mletačko Boiana → moderno Bojana/Buna"
+    },
+
+    "ada_bojana": {
+      "modern": ["Ada Bojana"],
+      "historical": ["Isola di Boiana", "Insula Barbanae"],
+      "type": "island",
+      "priority": "secondary"
+    },
+
+    "kufin": {
+      "modern": ["Kufin", "Kufini"],
+      "historical": ["Confine", "Confino", "Kufiri"],
+      "type": "border_locality",
+      "priority": "secondary",
+      "notes": "Albansko 'granica'; više lokaliteta — kod Budve = južna granica Venecije nakon 1573, takođe lokalni punktovi južno od Ulcinja"
+    },
+
+    "gjerana": {
+      "modern": ["Gjerana", "Kepi i Gjeranës"],
+      "historical": [],
+      "type": "cape_or_locality",
+      "priority": "secondary",
+      "notes": "Nema mletačkog/latinskog naziva u javnim izvorima; tražiti kao plain string"
+    },
+
+    "agirana": {
+      "modern": ["Agirana"],
+      "historical": [],
+      "type": "unknown",
+      "priority": "secondary",
+      "notes": "Hiperlokalni mikrotoponim; nema u javnim izvorima — pretraga samo kao plain string"
+    }
+  },
+
+  "regional_locations": {
+    "bar": {
+      "modern": ["Bar", "Tivar", "Tivari"],
+      "historical": ["Antibari", "Antibarum", "Antivari", "Antibareos", "Бар"],
+      "type": "city",
+      "priority": "primary"
+    },
+    "stari_bar": {
+      "modern": ["Stari Bar"],
+      "historical": ["Antibarum vetus", "Antivari vecchio"],
+      "type": "ruined_city",
+      "priority": "primary"
+    },
+    "skadar": {
+      "modern": ["Skadar", "Shkodër", "Shkodra"],
+      "historical": ["Scodra", "Scutari", "Scodrae", "Σκόδρα", "Скадар", "Iskenderiye"],
+      "type": "city",
+      "priority": "primary"
+    },
+    "skadarsko_jezero": {
+      "modern": ["Skadarsko jezero", "Liqeni i Shkodrës"],
+      "historical": ["Lacus Labeatis", "Lago di Scutari", "Lago Scutarino"],
+      "type": "lake",
+      "priority": "primary"
+    },
+    "svac": {
+      "modern": ["Svač", "Shasi", "Shas"],
+      "historical": ["Suacium", "Suacia", "Suaci", "Svatium", "Сваћ", "Civitas Suacensis"],
+      "type": "ruined_city",
+      "priority": "primary",
+      "notes": "Srednjovjekovna episkopija, ruševine kod Shasa"
+    },
+    "drivast": {
+      "modern": ["Drivast", "Drisht"],
+      "historical": ["Drivastum", "Drivasto", "Drivasti", "Drivostum"],
+      "type": "city",
+      "priority": "primary"
+    },
+    "ljes": {
+      "modern": ["Lješ", "Lezhë", "Alessio"],
+      "historical": ["Lissus", "Lesh", "Lissos"],
+      "type": "city",
+      "priority": "secondary"
+    },
+    "drac": {
+      "modern": ["Drač", "Durrës"],
+      "historical": ["Dyrrachium", "Durazzo", "Epidamnos", "Драч", "Δυρράχιον"],
+      "type": "city",
+      "priority": "secondary"
+    },
+    "kotor": {
+      "modern": ["Kotor"],
+      "historical": ["Cattaro", "Acruvium", "Decatera", "Котор"],
+      "type": "city",
+      "priority": "secondary"
+    },
+    "budva": {
+      "modern": ["Budva"],
+      "historical": ["Budua", "Butua", "Budoa"],
+      "type": "city",
+      "priority": "secondary"
+    },
+    "doclea": {
+      "modern": ["Duklja"],
+      "historical": ["Doclea", "Dioclea", "Δόκλεα", "Дукља"],
+      "type": "ruined_city",
+      "priority": "secondary"
+    }
+  },
+
+  "regions": {
+    "anamali": {
+      "modern": ["Anamali", "Ana e Malit", "Pod Mal"],
+      "historical": [],
+      "type": "region",
+      "priority": "primary",
+      "notes": "Etnografska oblast Ulcinj-Skadar"
+    },
+    "kraja": {
+      "modern": ["Krajë", "Skadarska Krajina"],
+      "historical": ["Crayna", "Karaina", "Krajna"],
+      "type": "region",
+      "priority": "primary"
+    },
+    "crmnica": {
+      "modern": ["Crmnica"],
+      "historical": ["Cermenica", "Tzernizza", "Crmnitza", "Цермница"],
+      "type": "region",
+      "priority": "secondary"
+    },
+    "mrkovici": {
+      "modern": ["Mrkovići", "Mrkojevići"],
+      "historical": ["Mercogliani", "Markovići", "Marcoviani"],
+      "type": "tribal_region",
+      "priority": "secondary"
+    },
+    "venetian_albania": {
+      "modern": ["Mletačka Albanija"],
+      "historical": ["Albania Veneta", "Venetian Albania", "Albania Venetiarum"],
+      "type": "polity",
+      "priority": "primary"
+    },
+    "duklja_zeta": {
+      "modern": ["Zeta", "Duklja"],
+      "historical": ["Diocleia", "Зета", "Дукља"],
+      "type": "polity",
+      "priority": "secondary"
+    }
+  },
+
+  "thematic_terms": {
+    "maritime": {
+      "general": [
+        "pomorstvo", "navigatio", "navigazione",
+        "navis", "navi", "brod", "brodovi",
+        "porto", "luka",
+        "mare adriaticum", "Adriaticum", "Jadran", "Adriatico",
+        "marittimo", "marinaio", "mornar"
+      ],
+      "ulcinj_pirates": [
+        "Dulcignotti", "ulcinjski gusari", "ulcinjski pirati",
+        "pirati di Dulcigno", "pirate of Dulcigno",
+        "corsari", "corsair",
+        "galiote", "galiota", "galiot",
+        "brigantine", "brigantini",
+        "fusta", "fuste"
+      ],
+      "trade": [
+        "olio d'oliva", "maslinovo ulje", "olive oil",
+        "amphora", "amfora",
+        "sale", "so", "salt",
+        "Saline di Dulcigno", "ulcinjska solana"
+      ]
+    },
+    "religious": [
+      "diocesis", "episcopatus", "episkopija",
+      "Olcinensis", "Suacensis", "Antibarensis", "Drivastensis",
+      "Archiepiscopatus Antibarensis"
+    ],
+    "fortifications": [
+      "castellum", "castrum", "castello", "kaštel",
+      "fortezza", "tvrđava", "kalaja",
+      "rocca", "torre", "kula"
+    ]
+  },
+
+  "search_strategies": {
+    "exact_match": "Use quoted variants for precise hits, e.g. \"Dulcigno vecchio\"",
+    "boolean_or": "Expand to (V1 OR V2 OR V3) when API supports",
+    "fuzzy": "For OCR'd old books, allow Levenshtein distance 1-2",
+    "geo_bbox": "For DARE/Pelagios: lat 41.5-42.5, lng 19.0-20.0 covers Ulcinj-Skadar-Bar-Lješ corridor"
+  },
+
+  "geo_bbox": {
+    "ulcinj_region": {
+      "lat_min": 41.85,
+      "lat_max": 42.15,
+      "lng_min": 19.10,
+      "lng_max": 19.55,
+      "description": "Ulcinj općina + Bojana delta + Krajina"
+    },
+    "south_adriatic": {
+      "lat_min": 41.5,
+      "lat_max": 42.5,
+      "lng_min": 19.0,
+      "lng_max": 20.0,
+      "description": "Lješ-Drač-Skadar-Ulcinj-Bar-Budva korak"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+data/edh-geo.json
+data/*.json
+__pycache__/
+*.pyc
+harvest.log

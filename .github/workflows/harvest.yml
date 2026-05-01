@@ -1,0 +1,48 @@
+name: Weekly Archive Harvest
+
+on:
+  schedule:
+    # Every Monday at 04:17 UTC (off-minute to avoid CF/GH peak)
+    - cron: '17 4 * * 1'
+  workflow_dispatch:  # allow manual trigger from Actions tab
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --quiet aiohttp
+
+      - name: Create data dir and fetch EDH dump
+        working-directory: harvester
+        run: |
+          mkdir -p data
+          curl -sSL -o data/edh-geo.json \
+            "https://raw.githubusercontent.com/epigraphic-database-heidelberg/data/master/geography/edhGeographicData.json"
+          ls -lh data/
+
+      - name: Run harvest with upload
+        working-directory: harvester
+        env:
+          SUPABASE_URL: https://frsgzfzvdxswqjpdmcsd.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 search.py --harvest --limit 50 --upload \
+            --source europeana --source internet_archive --source edh \
+            --source pelagios --source wikidata 2>&1 | tee harvest.log
+
+      - name: Upload harvest log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harvest-log-${{ github.run_id }}
+          path: harvester/harvest.log
+          retention-days: 30
