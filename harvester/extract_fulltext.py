@@ -131,7 +131,8 @@ async def get_ia_djvu_url(session, item_id: str) -> str | None:
 
 
 async def extract_ia(session, rec) -> str:
-    """Download djvu.txt for IA item, extract regional-term context."""
+    """Download djvu.txt for IA item. Returns full document (capped 50KB)
+    if regional terms are present anywhere in the text."""
     item_id = rec.get("source_id", "")
     if not item_id:
         return ""
@@ -155,7 +156,25 @@ async def extract_ia(session, rec) -> str:
     except Exception as e:
         print(f"    ! IA fetch error {item_id}: {e}", file=sys.stderr)
         return ""
-    return extract_context(text)
+    # Only keep documents that mention our regional terms (filter false positives)
+    if not TERM_PATTERN.search(text):
+        return ""
+    # Clean OCR artifacts and normalize whitespace
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    cleaned = cleaned.replace("- ", "")  # OCR line-break hyphens
+    # Cap at 50KB — covers most short docs fully, big books get representative chunk
+    if len(cleaned) <= 50_000:
+        return cleaned
+    # For big docs, keep the chunk around the FIRST regional match + intro
+    first_match = TERM_PATTERN.search(cleaned)
+    if first_match:
+        # Take ~5KB intro + ~45KB around first match
+        intro = cleaned[:5_000]
+        match_start = max(0, first_match.start() - 2_000)
+        match_end = min(len(cleaned), match_start + 45_000)
+        body = cleaned[match_start:match_end]
+        return f"{intro}\n\n[…opisni dio bez direktnih pomena izostavljen…]\n\n{body}"
+    return cleaned[:50_000]
 
 
 # ---- Gallica BnF ----

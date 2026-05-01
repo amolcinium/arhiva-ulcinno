@@ -81,9 +81,36 @@ const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${e
         )}
 
         {item.full_text && (
-          <section>
-            <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-2">Tekst (transkripcija)</h2>
-            <pre class="text-sm font-mono whitespace-pre-wrap leading-relaxed bg-white/40 p-4 border border-gold/40 rounded-sm" set:html={highlightedFullText}></pre>
+          <section id="transcript" data-item-id={item.id}>
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60">Full transcript dokumenta</h2>
+              {(item.metadata as any)?.transcript_cg ? (
+                <button id="toggle-cg-btn" type="button"
+                        class="text-xs font-sans px-3 py-1 bg-venetian text-parchment rounded-sm hover:bg-venetian/90">
+                  🇲🇪 Prikaži CG prevod
+                </button>
+              ) : (
+                <button id="translate-cg-btn" type="button"
+                        class="text-xs font-sans px-3 py-1 border border-gold/40 bg-white/60 rounded-sm hover:bg-white/90 hover:border-venetian">
+                  📜 Prevedi na CG
+                </button>
+              )}
+            </div>
+            <details class="mb-4">
+              <summary class="cursor-pointer text-sm font-sans text-ink/60 hover:text-venetian mb-2">
+                Tekst je {item.full_text.length} karaktera. Klikni da otvoriš/zatvoriš.
+              </summary>
+              <div id="transcript-original" class="bg-white/40 p-4 border border-gold/40 rounded-sm max-h-[600px] overflow-y-auto">
+                <pre class="text-sm font-mono whitespace-pre-wrap leading-relaxed" set:html={highlightedFullText}></pre>
+              </div>
+            </details>
+            {(item.metadata as any)?.transcript_cg && (
+              <div id="transcript-cg" class="hidden bg-parchment/60 p-4 border border-venetian/40 rounded-sm max-h-[600px] overflow-y-auto">
+                <p class="text-xs font-sans uppercase tracking-wider text-venetian mb-2">Prevod na crnogorski (Claude AI)</p>
+                <div class="text-base leading-relaxed" set:html={highlight((item.metadata as any).transcript_cg, queryTerms)}></div>
+              </div>
+            )}
+            <div id="translate-status" class="hidden mt-3 p-3 bg-gold/10 border border-gold/40 rounded-sm font-sans text-sm"></div>
           </section>
         )}
 
@@ -203,4 +230,62 @@ const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${e
       </aside>
     </div>
   </article>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      const transcriptEl = document.getElementById('transcript');
+      if (!transcriptEl) return;
+      const itemId = transcriptEl.dataset.itemId;
+      const status = document.getElementById('translate-status');
+      const translateBtn = document.getElementById('translate-cg-btn');
+      const toggleBtn = document.getElementById('toggle-cg-btn');
+      const cgEl = document.getElementById('transcript-cg');
+      const origEl = document.getElementById('transcript-original');
+
+      function showStatus(msg, isErr) {
+        if (!status) return;
+        status.classList.remove('hidden');
+        status.textContent = msg;
+        status.classList.toggle('bg-venetian/10', isErr);
+        status.classList.toggle('text-venetian', isErr);
+        status.classList.toggle('bg-gold/10', !isErr);
+      }
+
+      if (translateBtn) {
+        translateBtn.addEventListener('click', async () => {
+          translateBtn.disabled = true;
+          translateBtn.textContent = '⏳ Prevodi...';
+          showStatus('Šaljem tekst Claude AI servisu — prvi put traje ~10-30s. Sledeći put će biti instant (kešira se).', false);
+          try {
+            const r = await fetch('/api/translate-cg', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: itemId }),
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+            showStatus(`✓ Prevod gotov (${data.input_chars} → ${data.output_chars} karaktera). Refresh-ujem stranu...`, false);
+            setTimeout(() => location.reload(), 1500);
+          } catch (e) {
+            showStatus('Greška: ' + e.message, true);
+            translateBtn.disabled = false;
+            translateBtn.textContent = '📜 Prevedi na CG';
+          }
+        });
+      }
+
+      if (toggleBtn && cgEl && origEl) {
+        toggleBtn.addEventListener('click', () => {
+          const showingCg = !cgEl.classList.contains('hidden');
+          if (showingCg) {
+            cgEl.classList.add('hidden');
+            toggleBtn.textContent = '🇲🇪 Prikaži CG prevod';
+          } else {
+            cgEl.classList.remove('hidden');
+            toggleBtn.textContent = '🔤 Prikaži original';
+          }
+        });
+      }
+    });
+  </script>
 </Layout>
