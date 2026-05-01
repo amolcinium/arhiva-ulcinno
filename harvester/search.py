@@ -164,15 +164,20 @@ async def search_europeana(session, query: str, limit: int = 30) -> list[Record]
         thumb = item.get("edmPreview", [None])[0] if item.get("edmPreview") else ""
         descs = item.get("dcDescription") or []
         snippet = (descs[0][:400] if descs else "")[:400]
+        # Derive IIIF manifest URL from Europeana record ID — pattern: /presentation{id}/manifest
+        # Most rich-media items expose IIIF via this endpoint.
+        rec_id = item.get("id", "")
+        iiif_url = f"https://iiif.europeana.eu/presentation{rec_id}/manifest" if rec_id else ""
         rec = Record(
             source="europeana",
-            source_id=item.get("id", ""),
+            source_id=rec_id,
             title=title[:300],
             author=creator[:200],
             date_text=date_raw,
             date_year_min=ymin,
             date_year_max=ymax,
             url_original=url_orig,
+            url_iiif=iiif_url,
             thumbnail_url=thumb or "",
             snippet=snippet,
             doc_type=(item.get("type") or "").lower(),
