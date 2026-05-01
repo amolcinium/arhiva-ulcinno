@@ -31,6 +31,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   europeana: 'Europeana',
   internet_archive: 'Internet Archive',
   edh: 'EDH (rimski natpisi)',
+  pelagios: 'Pelagios (antičke lokacije)',
+  wikidata: 'Wikidata',
   digivatlib: 'DigiVatLib (Vatikan)',
   antenati: 'Antenati (Italija)',
   edr: 'EDR (Roma)',
@@ -51,6 +53,48 @@ export const LOCATIONS = [
   { key: 'kraja',                  label: 'Krajë (Skadarska Krajina)' },
   { key: 'venetian_albania',       label: 'Mletačka Albanija' },
 ];
+
+export interface MapPoint {
+  id: string;
+  source: string;
+  title: string;
+  location: string | null;
+  url_original: string;
+  longitude: number;
+  latitude: number;
+  date_text: string | null;
+}
+
+export async function getMapPoints(): Promise<MapPoint[]> {
+  // Pull all archive_results with EDH coordinates from metadata
+  const { data, error } = await supabase
+    .from('archive_results')
+    .select('id, source, title, location, url_original, date_text, metadata')
+    .eq('source', 'edh')
+    .not('metadata->longitude', 'is', null)
+    .limit(500);
+  if (error) {
+    console.error('getMapPoints error', error);
+    return [];
+  }
+  return (data ?? [])
+    .map((r: any) => {
+      const lng = r.metadata?.longitude;
+      const lat = r.metadata?.latitude;
+      if (typeof lng !== 'number' || typeof lat !== 'number') return null;
+      return {
+        id: r.id,
+        source: r.source,
+        title: r.title,
+        location: r.location,
+        url_original: r.url_original,
+        longitude: lng,
+        latitude: lat,
+        date_text: r.date_text,
+      } as MapPoint;
+    })
+    .filter((x): x is MapPoint => x !== null);
+}
 
 export async function searchResults(opts: {
   q?: string;

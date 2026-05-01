@@ -1,0 +1,99 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getMapPoints } from '../lib/supabase';
+
+const points = await getMapPoints();
+const pointsJson = JSON.stringify(points);
+---
+<Layout title="Mapa — Arhiva Ulcinj" description="Antičke lokacije u Ulcinj-Skadar regionu sa rimskim natpisima iz EDH baze.">
+  <section class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-semibold mb-2">Mapa antičkih lokacija</h1>
+    <p class="text-ink/70 mb-6 font-sans">
+      {points.length} find-spotova rimskih natpisa u jadranskom regionu (izvor: Epigraphic Database Heidelberg).
+      Klikni marker za detalje i link na sve natpise sa te lokacije.
+    </p>
+
+    <div id="map" class="w-full h-[600px] border-2 border-gold/40 rounded-sm bg-white/40"></div>
+
+    <div class="mt-6 grid md:grid-cols-3 gap-4 text-sm font-sans">
+      <div class="p-4 border border-gold/40 rounded-sm bg-white/40">
+        <strong class="block mb-1">Centar Ulcinj-region</strong>
+        <p class="text-ink/70">Lat 41.5–42.5, Lng 19.0–20.0 — Lissus, Olcinium, Scodra, Doclea, Acruvium, Buthoe</p>
+      </div>
+      <div class="p-4 border border-gold/40 rounded-sm bg-white/40">
+        <strong class="block mb-1">Šta je find-spot</strong>
+        <p class="text-ink/70">Lokacija gdje je natpis pronađen. Jedan grad može imati više find-spotova.</p>
+      </div>
+      <div class="p-4 border border-gold/40 rounded-sm bg-white/40">
+        <strong class="block mb-1">Pretraga po lokaciji</strong>
+        <p class="text-ink/70">Klikni na marker → "Vidi sve natpise" → otvara EDH stranicu sa svim natpisima.</p>
+      </div>
+    </div>
+  </section>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script is:inline define:vars={{ pointsJson }}>
+    const points = JSON.parse(pointsJson);
+
+    function loadLeaflet() {
+      return new Promise((resolve, reject) => {
+        if (window.L) return resolve(window.L);
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        s.onload = () => resolve(window.L);
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    loadLeaflet().then((L) => {
+      const map = L.map('map').setView([42.0, 19.4], 9);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© OpenStreetMap',
+      }).addTo(map);
+
+      const grouped = {};
+      for (const p of points) {
+        const key = p.location || 'unknown';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(p);
+      }
+
+      for (const [loc, items] of Object.entries(grouped)) {
+        const first = items[0];
+        const marker = L.circleMarker([first.latitude, first.longitude], {
+          radius: 6 + Math.min(items.length, 10),
+          fillColor: '#8b1f1f',
+          color: '#b8945c',
+          weight: 1.5,
+          opacity: 1,
+          fillOpacity: 0.7,
+        }).addTo(map);
+
+        const popupContent = `
+          <div style="font-family: 'EB Garamond', serif; max-width: 280px;">
+            <strong style="font-size: 16px;">${loc}</strong>
+            <p style="font-size: 12px; color: #666; margin: 4px 0;">${items.length} find-spot${items.length !== 1 ? 'ova' : ''}</p>
+            <div style="max-height: 200px; overflow-y: auto;">
+              ${items.slice(0, 5).map(p => `
+                <a href="${p.url_original}" target="_blank" rel="noopener"
+                   style="display: block; padding: 4px 0; border-bottom: 1px solid #eee; color: #8b1f1f; text-decoration: none; font-size: 13px;">
+                  → ${p.title}
+                </a>
+              `).join('')}
+              ${items.length > 5 ? `<p style="font-size: 11px; color: #999; padding-top: 4px;">...+ ${items.length - 5} više</p>` : ''}
+            </div>
+          </div>
+        `;
+        marker.bindPopup(popupContent);
+      }
+
+      // Fit bounds to all markers
+      if (points.length > 0) {
+        const group = L.featureGroup(points.map(p => L.marker([p.latitude, p.longitude])));
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
+    });
+  </script>
+</Layout>
