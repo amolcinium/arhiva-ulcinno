@@ -40,12 +40,32 @@ jobs:
         run: |
           python3 search.py --harvest --limit 50 --upload \
             --source europeana --source internet_archive --source edh \
-            --source pelagios --source wikidata 2>&1 | tee harvest.log
+            --source pelagios --source wikidata --source gallica \
+            --source loc --source wellcome 2>&1 | tee harvest.log
 
-      - name: Upload harvest log artifact
+      - name: Enrich empty snippets
+        working-directory: harvester
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 enrich_snippets.py 2>&1 | tee enrich.log
+        continue-on-error: true
+
+      - name: Extract full-text for new texts/books
+        working-directory: harvester
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 extract_fulltext.py 2>&1 | tee fulltext.log
+        continue-on-error: true
+
+      - name: Upload all logs as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: harvest-log-${{ github.run_id }}
-          path: harvester/harvest.log
+          name: harvest-logs-${{ github.run_id }}
+          path: |
+            harvester/harvest.log
+            harvester/enrich.log
+            harvester/fulltext.log
           retention-days: 30
