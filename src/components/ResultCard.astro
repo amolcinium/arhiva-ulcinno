@@ -1,0 +1,32 @@
+---
+import { SOURCE_LABELS, type ArchiveResult } from '../lib/supabase';
+interface Props { rec: ArchiveResult }
+const { rec } = Astro.props;
+const sourceLabel = SOURCE_LABELS[rec.source] ?? rec.source;
+const dateLabel = rec.date_text ?? (rec.date_year_min ? `${rec.date_year_min}${rec.date_year_max && rec.date_year_max !== rec.date_year_min ? `–${rec.date_year_max}` : ''}` : null);
+---
+<article class="border border-gold/40 rounded-sm bg-white/40 hover:bg-white/70 transition p-5 flex flex-col gap-2">
+  <div class="flex items-start justify-between gap-3">
+    <h3 class="text-lg font-semibold leading-tight">
+      <a href={rec.url_original} target="_blank" rel="noopener" class="hover:text-venetian">
+        {rec.title}
+      </a>
+    </h3>
+    {rec.thumbnail_url && (
+      <img src={rec.thumbnail_url} alt="" loading="lazy" class="w-20 h-20 object-cover rounded-sm border border-gold/30" />
+    )}
+  </div>
+  <div class="flex flex-wrap gap-2 text-xs font-sans">
+    <span class="px-2 py-0.5 bg-venetian/10 text-venetian rounded">{sourceLabel}</span>
+    {dateLabel && <span class="px-2 py-0.5 bg-ink/10 rounded">{dateLabel}</span>}
+    {rec.location && <span class="px-2 py-0.5 bg-ottoman/10 text-ottoman rounded">📍 {rec.location}</span>}
+    {rec.doc_type && <span class="px-2 py-0.5 bg-gold/20 rounded">{rec.doc_type}</span>}
+    {rec.language && <span class="px-2 py-0.5 bg-ink/10 rounded">{rec.language}</span>}
+  </div>
+  {rec.author && <p class="text-sm italic text-ink/70">{rec.author}</p>}
+  {rec.snippet && <p class="text-sm text-ink/80 line-clamp-3">{rec.snippet}</p>}
+  <div class="flex gap-3 text-xs font-sans pt-1">
+    <a href={rec.url_original} target="_blank" rel="noopener" class="text-venetian hover:underline">Otvori original →</a>
+    {rec.url_iiif && <a href={rec.url_iiif} target="_blank" rel="noopener" class="text-ottoman hover:underline">IIIF manifest</a>}
+  </div>
+</article>

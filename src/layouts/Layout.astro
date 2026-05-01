@@ -1,0 +1,51 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title = 'Arhiva Ulcinj', description = 'Federalna pretraga starih arhiva o Ulcinju i okolini — Vatikan, Mletačka, rimski natpisi, italijanski drzavni arhivi.' } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="sr-Latn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={`https://arhiva.ulcinno.com${Astro.url.pathname}`} />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="min-h-screen bg-parchment text-ink font-serif">
+  <header class="border-b-2 border-gold/40 bg-parchment/80 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 hover:opacity-80">
+        <span class="text-2xl">📜</span>
+        <span class="text-xl font-semibold">Arhiva Ulcinj</span>
+      </a>
+      <nav class="flex gap-5 text-sm font-sans">
+        <a href="/" class="hover:text-venetian">Pretraga</a>
+        <a href="/lokacije" class="hover:text-venetian">Lokacije</a>
+        <a href="/o-projektu" class="hover:text-venetian">O projektu</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <slot />
+  </main>
+  <footer class="mt-16 border-t border-gold/40 py-8 text-center text-sm font-sans text-ink/60">
+    <p>Arhiva Ulcinj · Otvoreni istraživački portal · <a href="https://ulcinno.com" class="hover:text-venetian">Ulcinno</a> · {new Date().getFullYear()}</p>
+    <p class="mt-2">Izvori: Europeana, Internet Archive, EDH, DigiVatLib, Antenati. Sav sadržaj zadržava prava izvornih institucija.</p>
+  </footer>
+</body>
+</html>
+
+<style is:global>
+  :root { color-scheme: light; }
+  body { font-feature-settings: 'kern','liga','calt'; }
+</style>

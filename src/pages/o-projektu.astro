@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="O projektu — Arhiva Ulcinj">
+  <article class="max-w-3xl mx-auto px-4 py-12 prose prose-lg prose-stone">
+    <h1 class="text-3xl font-semibold">O projektu</h1>
+    <p class="text-lg text-ink/80">
+      <strong>Arhiva Ulcinj</strong> je istraživački portal koji u jednoj pretrazi spaja stare izvore o Ulcinju i okolnom području —
+      antičkom Olciniumu, mletačkom Dulcignu, ottomanskom Ülgünu, i savremenom Ulcinju.
+    </p>
+
+    <h2>Šta tražimo</h2>
+    <p>27 lokacija u rječniku, svaka sa istorijskim varijantama imena na latinskom, italijanskom, albanskom, slovenskom, otomanskom i grčkom.
+    Pokrivamo: Ulcinj (sve varijante), Stari Ulcinj kod Kruča, Valdanos, Bojanu/Bunu/Barbanu, Svač, Bar/Antibarum, Skadar/Scodru, Drivast,
+    Anamali, Kraju, Mletačku Albaniju, i pomorske teme (gusari Dulcignotti, mletačka trgovina, brodogradnja).</p>
+
+    <h2>Izvori</h2>
+    <ul>
+      <li><strong>Europeana</strong> — agregat italijanskih, mletačkih, EU arhiva (karte Camocio, Coronelli, fotografije, dokumenti)</li>
+      <li><strong>Internet Archive</strong> — digitalizovane knjige i monografije (Šufflay, Jireček, Marković, Jovićević)</li>
+      <li><strong>EDH</strong> (Heidelberg Epigraphic Database) — antički natpisi, lokalni dump (212 findspot-ova u našem regionu)</li>
+      <li><strong>DigiVatLib</strong> — Vatikanska biblioteka, mletački/papinski rukopisi (uskoro)</li>
+      <li><strong>Antenati</strong> — italijanski drzavni arhivi, civil records (uskoro)</li>
+    </ul>
+
+    <h2>Tehnologija</h2>
+    <p>Astro + Tailwind, hostovano na Cloudflare Pages.
+    Bekend: Supabase (Postgres + Storage + REST).
+    Federalna pretraga je Python skripta koja paralelno hita sve izvore (asyncio + aiohttp), normalizuje rezultate u jedan schema, i upisuje u <code>archive_results</code> tabelu.</p>
+
+    <h2>Otvoreni kod</h2>
+    <p>Sav rad je dio <a href="https://ulcinno.com">Ulcinno</a> projekta — neprofitnog connectora za Ulcinj. Skill <code>archive-search</code> dostupan u Claude Code arsenalu, source: <code>~/.claude/skills/archive-search/</code>.</p>
+
+    <h2>Kontakt</h2>
+    <p>Ardi Mavriq · <a href="mailto:ardi@ulcinno.com">ardi@ulcinno.com</a></p>
+  </article>
+</Layout>

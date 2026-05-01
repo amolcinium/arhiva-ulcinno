@@ -1,0 +1,20 @@
+{
+  "name": "arhiva-ulcinno",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Arhiva Ulcinj — federated search portal across Vatican, Italian, Roman, and European archives. Built on Astro + Supabase + Cloudflare Pages.",
+  "scripts": {
+    "dev": "astro dev --host",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^11.0.0",
+    "@astrojs/tailwind": "^5.1.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "astro": "^4.16.0",
+    "tailwindcss": "^3.4.0"
+  }
+}

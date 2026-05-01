@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { LOCATIONS } from '../lib/supabase';
+---
+<Layout title="Lokacije — Arhiva Ulcinj">
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <h1 class="text-3xl font-semibold mb-2">Lokacije i istorijska imena</h1>
+    <p class="text-ink/70 mb-8 font-sans">Svaka lokacija pretražuje sva istorijska imena u svim izvorima paralelno.</p>
+    <ul class="grid md:grid-cols-2 gap-3">
+      {LOCATIONS.map((loc) => (
+        <li>
+          <a href={`/?location=${loc.key}`} class="block p-4 border border-gold/40 rounded-sm bg-white/40 hover:bg-white/70 transition">
+            <strong class="text-lg">{loc.label.split(' / ')[0]}</strong>
+            <p class="text-sm text-ink/70 font-sans mt-1">{loc.label.split(' / ').slice(1).join(' / ') || '—'}</p>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</Layout>
