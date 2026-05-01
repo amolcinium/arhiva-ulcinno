@@ -25,8 +25,19 @@ const dateLabel = rec.date_text ?? (rec.date_year_min ? `${rec.date_year_min}${r
   </div>
   {rec.author && <p class="text-sm italic text-ink/70">{rec.author}</p>}
   {rec.snippet && <p class="text-sm text-ink/80 line-clamp-3">{rec.snippet}</p>}
-  <div class="flex gap-3 text-xs font-sans pt-1">
+  <div class="flex flex-wrap gap-3 text-xs font-sans pt-1">
     <a href={rec.url_original} target="_blank" rel="noopener" class="text-venetian hover:underline">Otvori original →</a>
-    {rec.url_iiif && <a href={rec.url_iiif} target="_blank" rel="noopener" class="text-ottoman hover:underline">IIIF manifest</a>}
+    {rec.url_iiif && (
+      <>
+        <a
+          href={`https://projectmirador.org/embed/?iiif-content=${encodeURIComponent(rec.url_iiif)}`}
+          target="_blank"
+          rel="noopener"
+          class="text-ottoman hover:underline"
+          title="Otvara Mirador viewer sa zoom, listanjem strana i poređenjem"
+        >🔍 Otvori u Mirador</a>
+        <a href={rec.url_iiif} target="_blank" rel="noopener" class="text-ink/60 hover:underline">IIIF manifest</a>
+      </>
+    )}
   </div>
 </article>

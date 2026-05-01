@@ -118,19 +118,32 @@ const totalPages = Math.ceil(total / limit);
   )}
 
   {!q && !location && !source && (
-    <section class="max-w-4xl mx-auto px-4 py-12">
+    <section class="max-w-5xl mx-auto px-4 py-12">
+      <h2 class="text-2xl font-semibold text-center mb-8">Šta sve pretražuješ jednom komandom</h2>
       <div class="grid md:grid-cols-3 gap-6 font-sans">
         <div class="p-6 border border-gold/40 rounded-sm bg-white/40">
           <h3 class="text-lg font-semibold mb-2 font-serif">📜 Mletačke karte</h3>
-          <p class="text-sm text-ink/70">Camocio (1571), Coronelli (1688), gravire i atlasi sa Ulcinjem, Skadrom, Bojanom.</p>
+          <p class="text-sm text-ink/70">Camocio (1571), Coronelli (1688), gravire i atlasi sa Ulcinjem, Skadrom, Bojanom. Izvor: Europeana.</p>
         </div>
         <div class="p-6 border border-gold/40 rounded-sm bg-white/40">
           <h3 class="text-lg font-semibold mb-2 font-serif">🏛 Rimski natpisi</h3>
-          <p class="text-sm text-ink/70">EDH dump — 212 antičkih find-spotova u Ulcinj-Skadar regionu (Olcinium, Scodra, Doclea, Lissus).</p>
+          <p class="text-sm text-ink/70">EDH (Heidelberg) — 212 antičkih find-spotova u Ulcinj-Skadar regionu: Olcinium, Scodra, Doclea, Lissus, Acruvium.</p>
         </div>
         <div class="p-6 border border-gold/40 rounded-sm bg-white/40">
           <h3 class="text-lg font-semibold mb-2 font-serif">📚 Stare knjige</h3>
           <p class="text-sm text-ink/70">Internet Archive: Šufflay, Jireček, Marković, Jovićević, novije monografije.</p>
+        </div>
+        <div class="p-6 border border-gold/40 rounded-sm bg-white/40">
+          <h3 class="text-lg font-semibold mb-2 font-serif">🌍 Antičke lokacije</h3>
+          <p class="text-sm text-ink/70">Pelagios Pleiades — linked-data za antičke gradove i pomorske rute Jadrana.</p>
+        </div>
+        <div class="p-6 border border-gold/40 rounded-sm bg-white/40">
+          <h3 class="text-lg font-semibold mb-2 font-serif">🔗 Wikidata</h3>
+          <p class="text-sm text-ink/70">SPARQL upiti za istorijska mjesta, osobe, događaje sa multi-jezičnim labelima.</p>
+        </div>
+        <div class="p-6 border border-gold/40 rounded-sm bg-white/40">
+          <h3 class="text-lg font-semibold mb-2 font-serif">🔍 IIIF Mirador</h3>
+          <p class="text-sm text-ink/70">Klik na "Otvori u Mirador" kod rezultata sa IIIF manifestom — zoom, listanje strana, side-by-side poređenje.</p>
         </div>
       </div>
     </section>
