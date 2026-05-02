@@ -37,6 +37,29 @@ DIRECT_ULCINJ_LOCATIONS = {
     "kruce", "valdanos", "kalaja"
 }
 
+# Roman/antique findspots in Ulcinj-region — for EDH records, if the findspot
+# (stored in title or location field) matches one of these, KEEP automatically.
+# These are antique cities of the Adriatic-Skadar corridor.
+EDH_REGIONAL_FINDSPOTS = [
+    "Olcinium", "Olchinium", "Colchinium", "Colchinia",
+    "Scodra", "Scodrae",  # Skadar
+    "Doclea", "Dioclea",  # Duklja
+    "Lissus", "Lissos",  # Lješ
+    "Antibarum",  # Bar
+    "Suacium",  # Svač
+    "Drivastum",  # Drivast
+    "Acruvium",  # Kotor
+    "Decatera",  # Kotor variant
+    "Buthoe", "Butua",  # Budva
+    "Risinium",  # Risan
+    "Dyrrachium",  # Drač
+    "Epidaurum",  # Cavtat
+    "Salona",  # Solin (broader region)
+]
+EDH_FINDSPOT_RE = re.compile(
+    "|".join(re.escape(t) for t in EDH_REGIONAL_FINDSPOTS), re.IGNORECASE
+)
+
 # Locations that are ulcinj-region but ALSO match unrelated content frequently.
 # Records tagged with these locations need explicit Ulcinj anchor in text to qualify.
 PROBLEMATIC_LOCATIONS = {
@@ -98,7 +121,13 @@ def classify(rec: dict) -> str:
     loc = rec.get("location") or ""
     if loc in DIRECT_ULCINJ_LOCATIONS:
         return "keep"
-    # For problematic and other locations: require anchor term in text
+    # EDH-specific: if findspot (title or location) is an antique city
+    # in our Adriatic-Skadar regional corridor, KEEP automatically.
+    if rec.get("source") == "edh":
+        title = str(rec.get("title") or "")
+        if EDH_FINDSPOT_RE.search(title) or EDH_FINDSPOT_RE.search(loc):
+            return "keep"
+    # For all other records: require anchor term in title/snippet/full_text
     if has_anchor_term(rec):
         return "keep"
     return "suspect"
