@@ -164,6 +164,16 @@ export async function getRelated(item: ArchiveResult, limit = 6): Promise<Archiv
   return out.slice(0, limit);
 }
 
+/**
+ * Filter out records marked as hidden via metadata.hidden=true.
+ * Reusable for any query — chains as additional .neq() / .or() condition.
+ */
+function applyHiddenFilter<T extends ReturnType<typeof supabase.from>>(query: T): T {
+  // Postgres JSONB: metadata->>'hidden' returns text 'true' or null
+  // We want records where it is NOT 'true' (so includes null + 'false')
+  return (query as any).or('metadata->>hidden.is.null,metadata->>hidden.neq.true');
+}
+
 export async function searchResults(opts: {
   q?: string;
   location?: string;
@@ -176,7 +186,13 @@ export async function searchResults(opts: {
   offset?: number;
 }) {
   const { q, location, source, yearMin, yearMax, language, hasIiif, limit = 30, offset = 0 } = opts;
-  let query = supabase.from('archive_results_public').select('*', { count: 'exact' });
+  // Use base table (not view) so we can filter on metadata->>'hidden'
+  let query = supabase.from('archive_results').select(
+    'id, source, source_id, title, author, date_text, date_year_min, date_year_max, location, language, doc_type, url_original, url_iiif, thumbnail_url, snippet, tags, fetched_at',
+    { count: 'exact' }
+  );
+  // Hidden filter: skip records where metadata.hidden is true
+  query = (query as any).or('metadata->>hidden.is.null,metadata->>hidden.neq.true');
   if (q) {
     query = query.or(`title.ilike.%${q}%,snippet.ilike.%${q}%,author.ilike.%${q}%`);
   }

@@ -1,0 +1,88 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { supabase, SOURCE_LABELS } from '../../lib/supabase';
+
+// Fetch all hidden records for admin restore page
+const { data, count } = await supabase
+  .from('archive_results')
+  .select('id, source, title, location, metadata, fetched_at', { count: 'exact' })
+  .eq('metadata->>hidden', 'true')
+  .order('metadata->>hidden_at', { ascending: false })
+  .limit(500);
+
+const hidden = (data ?? []) as any[];
+---
+<Layout title="Sakriveni rezultati — Admin" description="Sakriveni rezultati. Vidljivi samo u admin mode-u.">
+  <article class="max-w-4xl mx-auto px-4 py-8">
+
+    <nav class="text-sm font-sans mb-4 text-ink/60">
+      <a href="/" class="hover:text-venetian">← Pretraga</a> ·
+      <span>Sakriveni rezultati</span>
+    </nav>
+
+    <header class="mb-6 pb-6 border-b-2 border-gold/40">
+      <h1 class="text-3xl font-semibold">Sakriveni rezultati</h1>
+      <p class="text-ink/70 mt-2 font-sans">
+        Ova stranica je dostupna samo u admin mode-u (otvorio si je preko <code>?admin=&lt;token&gt;</code>).
+        Ovdje su {count ?? 0} sakrivenih zapisa. Klikni "Vrati" da ih ponovo prikažeš u pretrazi.
+      </p>
+    </header>
+
+    {hidden.length === 0 ? (
+      <p class="text-center text-ink/60 py-12 font-sans">Nema sakrivenih rezultata. 🎉</p>
+    ) : (
+      <ul class="space-y-3 font-sans">
+        {hidden.map((r) => {
+          const md = r.metadata ?? {};
+          return (
+            <li class="p-4 border border-gold/40 rounded-sm bg-white/40 flex items-start justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <strong class="block text-base leading-tight">{r.title?.slice(0, 200)}</strong>
+                <p class="text-xs text-ink/60 mt-1">
+                  {SOURCE_LABELS[r.source] ?? r.source}
+                  {r.location && ` · 📍 ${r.location}`}
+                  {md.hidden_at && ` · sakriveno ${new Date(md.hidden_at).toLocaleString('sr-Latn')}`}
+                </p>
+                {md.hidden_reason && <p class="text-xs italic text-ink/60 mt-1">Razlog: {md.hidden_reason}</p>}
+              </div>
+              <button type="button" class="restore-btn px-3 py-1 text-xs bg-ottoman/10 text-ottoman border border-ottoman/30 rounded-sm hover:bg-ottoman/20"
+                      data-id={r.id}>↩ Vrati</button>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </article>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      const token = localStorage.getItem('arhiva_admin_token');
+      if (!token) {
+        alert('Nisi u admin mode-u. Otvori URL ?admin=<token> da bi vidio dugmad.');
+        return;
+      }
+      document.querySelectorAll('.restore-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.id;
+          if (!id) return;
+          btn.disabled = true;
+          btn.textContent = '...';
+          try {
+            const r = await fetch('/api/hide', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id, token, hide: false }),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            btn.textContent = '✓ vraćeno';
+            btn.closest('li').style.opacity = '0.4';
+          } catch (err) {
+            alert('Greška: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = '↩ Vrati';
+          }
+        });
+      });
+    });
+  </script>
+</Layout>

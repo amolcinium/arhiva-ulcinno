@@ -27,7 +27,13 @@ const detailUrl = `/item/${rec.id}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
   </div>
   {rec.author && <p class="text-sm italic text-ink/70">{rec.author}</p>}
   {rec.snippet && <p class="text-sm text-ink/80 line-clamp-3">{rec.snippet}</p>}
-  <div class="flex flex-wrap gap-3 text-xs font-sans pt-1" onclick="event.stopPropagation()">
+  <div class="flex flex-wrap gap-3 text-xs font-sans pt-1 items-center" onclick="event.stopPropagation()">
     <a href={detailUrl} class="text-venetian hover:underline font-medium">📖 Detalji →</a>
+    <button
+      type="button"
+      class="hide-btn hidden ml-auto text-ink/50 hover:text-venetian"
+      data-id={rec.id}
+      title="Sakrij ovaj rezultat (samo admin)"
+    >🗑 Sakrij</button>
   </div>
 </article>

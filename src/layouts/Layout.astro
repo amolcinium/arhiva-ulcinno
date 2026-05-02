@@ -53,3 +53,72 @@ const { title = 'Arhiva Ulcinj', description = 'Federalna pretraga starih arhiva
   :root { color-scheme: light; }
   body { font-feature-settings: 'kern','liga','calt'; }
 </style>
+
+<script is:inline>
+  // Admin mode: ?admin=<token> in URL stores token in localStorage and shows hide buttons.
+  // Logout: ?admin=logout
+  (function() {
+    const params = new URLSearchParams(window.location.search);
+    const adminParam = params.get('admin');
+    const KEY = 'arhiva_admin_token';
+    if (adminParam === 'logout') {
+      localStorage.removeItem(KEY);
+      params.delete('admin');
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.location.replace(newUrl);
+      return;
+    }
+    if (adminParam) {
+      localStorage.setItem(KEY, adminParam);
+      params.delete('admin');
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+    const token = localStorage.getItem(KEY);
+    if (!token) return;
+    // Admin mode active — reveal hide buttons + add visual indicator
+    document.documentElement.classList.add('admin-mode');
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.hide-btn').forEach((btn) => {
+        btn.classList.remove('hidden');
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const id = btn.dataset.id;
+          if (!id || !confirm('Sakriti ovaj rezultat? (Možeš ga vratiti na /admin/sakriveni stranici)')) return;
+          btn.disabled = true;
+          btn.textContent = '...';
+          try {
+            const r = await fetch('/api/hide', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id, token, hide: true }),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            // Hide the card visually
+            const card = btn.closest('article');
+            if (card) {
+              card.style.opacity = '0.3';
+              card.style.pointerEvents = 'none';
+              btn.textContent = '✓ sakriveno';
+            }
+          } catch (err) {
+            alert('Greška: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = '🗑 Sakrij';
+          }
+        });
+      });
+      // Add admin badge to header
+      const header = document.querySelector('header nav');
+      if (header && !header.querySelector('.admin-badge')) {
+        const badge = document.createElement('a');
+        badge.className = 'admin-badge text-venetian text-xs font-semibold';
+        badge.href = '?admin=logout';
+        badge.title = 'Admin mode active. Click to logout.';
+        badge.textContent = '👤 admin';
+        header.appendChild(badge);
+      }
+    });
+  })();
+</script>
