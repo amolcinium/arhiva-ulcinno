@@ -1,0 +1,163 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { supabase, SOURCE_LABELS } from '../lib/supabase';
+
+// Fetch all records with a date
+const { data: rawData } = await supabase
+  .from('archive_results')
+  .select('id, title, source, date_year_min, url_original, date_text')
+  .not('date_year_min', 'is', null)
+  .order('date_year_min', { ascending: true })
+  .limit(2000);
+
+const records = (rawData ?? []) as Array<{
+  id: string;
+  title: string;
+  source: string;
+  date_year_min: number;
+  url_original: string;
+  date_text: string | null;
+}>;
+
+// Group by century (floor to nearest 100)
+const centuryMap = new Map<number, typeof records>();
+for (const r of records) {
+  const c = Math.floor(r.date_year_min / 100) * 100;
+  if (!centuryMap.has(c)) centuryMap.set(c, []);
+  centuryMap.get(c)!.push(r);
+}
+
+// Sort centuries
+const centuries = Array.from(centuryMap.entries()).sort((a, b) => a[0] - b[0]);
+
+// Top 5 most-populated centuries
+const top5 = [...centuries].sort((a, b) => b[1].length - a[1].length).slice(0, 5);
+
+// Compute bar heights (log scale)
+const maxCount = Math.max(...centuries.map(([, recs]) => recs.length), 1);
+const BAR_MAX_H = 160; // px
+const BAR_W = 34;      // px per bar
+
+function barHeight(count: number): number {
+  return Math.round((Math.log(count + 1) / Math.log(maxCount + 1)) * BAR_MAX_H);
+}
+
+function centuryLabel(c: number): string {
+  if (c < 0) return `${Math.abs(c)} BC`;
+  if (c === 0) return '1–99';
+  return `${c}s`;
+}
+
+const chartWidth = centuries.length * (BAR_W + 4);
+const chartHeight = BAR_MAX_H + 40; // bar area + labels
+
+const totalDated = records.length;
+---
+<Layout
+  title="Vremenska osa — Arhiva Ulcinj"
+  description="Pokrivenost arhivskih zapisa kroz vekove — od antike do modernog doba."
+>
+  <section class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-semibold mb-1">Vremenska osa</h1>
+    <p class="text-ink/70 font-sans text-sm mb-2">
+      pokrivenost izvora kroz vekove
+    </p>
+    <p class="font-sans text-sm text-ink/60 mb-8">
+      {totalDated} zapisa sa datumom od {records.length > 0 ? records[0].date_year_min : '?'} do {records.length > 0 ? records[records.length - 1].date_year_min : '?'}.
+      Klikni vek na grafikonu da pretražiš taj period.
+    </p>
+
+    <!-- Bar chart (SVG, scrollable) -->
+    <div class="overflow-x-auto mb-10 border border-gold/40 rounded-sm bg-white/40 p-4">
+      <svg
+        width={chartWidth}
+        height={chartHeight + 10}
+        aria-label="Bar chart: number of records per century"
+        class="block"
+      >
+        {centuries.map(([c, recs], i) => {
+          const x = i * (BAR_W + 4);
+          const h = barHeight(recs.length);
+          const y = BAR_MAX_H - h;
+          const yearMin = c;
+          const yearMax = c + 99;
+          const href = `/?yearMin=${yearMin}&yearMax=${yearMax}`;
+          return (
+            <a href={href} title={`${centuryLabel(c)}: ${recs.length} zapisa`}>
+              <rect
+                x={x}
+                y={y}
+                width={BAR_W}
+                height={h}
+                fill={c < 0 ? '#704214' : c < 1000 ? '#8b1f1f' : c < 1800 ? '#c4860a' : '#1a5c8a'}
+                opacity="0.85"
+                rx="2"
+              />
+              <text
+                x={x + BAR_W / 2}
+                y={BAR_MAX_H + 14}
+                text-anchor="middle"
+                font-size="9"
+                font-family="Inter, sans-serif"
+                fill="#5a4a3a"
+                transform={`rotate(-45, ${x + BAR_W / 2}, ${BAR_MAX_H + 14})`}
+              >
+                {centuryLabel(c)}
+              </text>
+              <title>{centuryLabel(c)}: {recs.length} zapisa</title>
+            </a>
+          );
+        })}
+        <!-- Baseline -->
+        <line x1="0" y1={BAR_MAX_H} x2={chartWidth} y2={BAR_MAX_H} stroke="#b8945c" stroke-width="1" />
+      </svg>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap gap-4 text-xs font-sans mb-10">
+      <span><span style="color:#704214">■</span> Antika (pr.n.e.)</span>
+      <span><span style="color:#8b1f1f">■</span> Antika / srednji vek (0–999)</span>
+      <span><span style="color:#c4860a">■</span> Srednji vek / rani novi vek (1000–1799)</span>
+      <span><span style="color:#1a5c8a">■</span> Novi vek (1800+)</span>
+    </div>
+
+    <!-- Top 5 centuries -->
+    <h2 class="text-2xl font-semibold mb-6">Najzastupljeniji vekovi</h2>
+    <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {top5.map(([c, recs]) => {
+        const yearMin = c;
+        const yearMax = c + 99;
+        const samples = recs.slice(0, 3);
+        return (
+          <div class="border border-gold/40 rounded-sm bg-white/40 p-4">
+            <div class="flex items-baseline justify-between mb-3">
+              <h3 class="text-lg font-semibold">{centuryLabel(c)}</h3>
+              <a
+                href={`/?yearMin=${yearMin}&yearMax=${yearMax}`}
+                class="text-xs font-sans text-venetian hover:underline"
+              >
+                {recs.length} zapisa →
+              </a>
+            </div>
+            <ul class="space-y-2">
+              {samples.map((r) => (
+                <li class="text-sm">
+                  <a
+                    href={`/item/${r.id}`}
+                    class="text-venetian hover:underline line-clamp-2 leading-snug"
+                  >
+                    {r.title}
+                  </a>
+                  <span class="block text-xs text-ink/50 font-sans mt-0.5">
+                    {SOURCE_LABELS[r.source] ?? r.source}
+                    {r.date_text ? ` · ${r.date_text}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  </section>
+</Layout>

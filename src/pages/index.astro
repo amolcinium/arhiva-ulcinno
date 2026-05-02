@@ -7,6 +7,10 @@ const url = new URL(Astro.request.url);
 const q = url.searchParams.get('q') ?? '';
 const location = url.searchParams.get('location') ?? '';
 const source = url.searchParams.get('source') ?? '';
+const yearMinParam = url.searchParams.get('yearMin');
+const yearMaxParam = url.searchParams.get('yearMax');
+const yearMin = yearMinParam ? parseInt(yearMinParam, 10) : undefined;
+const yearMax = yearMaxParam ? parseInt(yearMaxParam, 10) : undefined;
 const page = parseInt(url.searchParams.get('p') ?? '1', 10);
 const limit = 30;
 const offset = (page - 1) * limit;
@@ -15,9 +19,9 @@ let results: any[] = [];
 let total = 0;
 let error: string | null = null;
 
-if (q || location || source) {
+if (q || location || source || yearMin !== undefined || yearMax !== undefined) {
   try {
-    const r = await searchResults({ q, location, source, limit, offset });
+    const r = await searchResults({ q, location, source, yearMin, yearMax, limit, offset });
     results = r.results;
     total = r.total;
   } catch (e: any) {
