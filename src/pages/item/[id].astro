@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { getItem, getRelated, SOURCE_LABELS, LOCATIONS } from '../../lib/supabase';
+import { toBibtex, toApa, toChicago } from '../../lib/citation';
 
 const { id } = Astro.params;
 const url = new URL(Astro.request.url);
@@ -42,6 +43,10 @@ const highlightedFullText = highlight(item.full_text, queryTerms);
 
 const hasIiif = !!item.url_iiif;
 const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${encodeURIComponent(item.url_iiif!)}` : '';
+
+const citeBibtex = toBibtex(item);
+const citeApa = toApa(item);
+const citeChicago = toChicago(item);
 ---
 <Layout title={`${item.title.slice(0, 80)} — Arhiva Ulcinj`} description={item.snippet ?? `${item.title} · izvor: ${sourceLabel}`}>
   <article class="max-w-5xl mx-auto px-4 py-8">
@@ -132,6 +137,28 @@ const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${e
             </p>
           </section>
         )}
+
+        <!-- Citation export -->
+        <section class="pt-4 border-t border-gold/40" id="cite-section">
+          <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-3">Citiraj</h2>
+          <div class="flex flex-wrap gap-2 mb-3" id="cite-buttons">
+            <button data-fmt="bibtex" class="cite-btn px-3 py-1 border border-gold/40 bg-white/60 rounded-sm text-sm font-sans hover:bg-white/90 hover:border-venetian transition">
+              BibTeX
+            </button>
+            <button data-fmt="apa" class="cite-btn px-3 py-1 border border-gold/40 bg-white/60 rounded-sm text-sm font-sans hover:bg-white/90 hover:border-venetian transition">
+              APA
+            </button>
+            <button data-fmt="chicago" class="cite-btn px-3 py-1 border border-gold/40 bg-white/60 rounded-sm text-sm font-sans hover:bg-white/90 hover:border-venetian transition">
+              Chicago
+            </button>
+          </div>
+          <div id="cite-output" class="hidden">
+            <pre id="cite-pre" class="bg-white/60 border border-gold/40 rounded-sm p-3 text-xs font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto"></pre>
+            <button id="cite-copy-btn" class="mt-2 text-xs font-sans px-3 py-1 border border-gold/40 bg-white/60 rounded-sm hover:bg-white/90 hover:border-venetian transition">
+              Kopiraj
+            </button>
+          </div>
+        </section>
 
         <section class="flex flex-wrap gap-3 pt-4 border-t border-gold/40">
           <a href={item.url_original} target="_blank" rel="noopener"
@@ -231,8 +258,48 @@ const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${e
     </div>
   </article>
 
-  <script is:inline>
+  <script is:inline define:vars={{ citeBibtex, citeApa, citeChicago }}>
     document.addEventListener('DOMContentLoaded', () => {
+      // --- citation buttons ---
+      const FORMATS = { bibtex: citeBibtex, apa: citeApa, chicago: citeChicago };
+      const citeOutput = document.getElementById('cite-output');
+      const citePre = document.getElementById('cite-pre');
+      const citeCopyBtn = document.getElementById('cite-copy-btn');
+      let activeFmt = null;
+
+      document.querySelectorAll('.cite-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const fmt = btn.dataset.fmt;
+          if (activeFmt === fmt) {
+            citeOutput.classList.add('hidden');
+            activeFmt = null;
+            document.querySelectorAll('.cite-btn').forEach(b => b.classList.remove('bg-venetian', 'text-parchment', 'border-venetian'));
+          } else {
+            activeFmt = fmt;
+            citePre.textContent = FORMATS[fmt] ?? '';
+            citeOutput.classList.remove('hidden');
+            document.querySelectorAll('.cite-btn').forEach(b => {
+              const active = b.dataset.fmt === fmt;
+              b.classList.toggle('bg-venetian', active);
+              b.classList.toggle('text-parchment', active);
+              b.classList.toggle('border-venetian', active);
+            });
+          }
+        });
+      });
+
+      if (citeCopyBtn) {
+        citeCopyBtn.addEventListener('click', () => {
+          if (!activeFmt) return;
+          navigator.clipboard.writeText(FORMATS[activeFmt] ?? '').then(() => {
+            const orig = citeCopyBtn.textContent;
+            citeCopyBtn.textContent = '✓ Kopirano!';
+            setTimeout(() => { citeCopyBtn.textContent = orig; }, 1800);
+          });
+        });
+      }
+
+      // --- translate section ---
       const transcriptEl = document.getElementById('transcript');
       if (!transcriptEl) return;
       const itemId = transcriptEl.dataset.itemId;
