@@ -221,6 +221,22 @@ const TOPIC_LABELS: Record<string, string> = {
           </section>
         )}
 
+        <section class="p-4 bg-gold/10 border border-gold/40 rounded-sm">
+          <a href={`/transkript/${item.id}`} class="flex items-center gap-3 group">
+            <span class="text-3xl">📖</span>
+            <div class="flex-1">
+              <strong class="block group-hover:text-venetian font-serif text-lg">
+                {item.full_text ? 'Otvori full transkript' : 'Provjeri da li ima full transkript'} →
+              </strong>
+              <span class="text-sm text-ink/70 font-sans">
+                {item.full_text
+                  ? `${item.full_text.length.toLocaleString()} karaktera · čitaj cijeli dokument · pretraga unutar dokumenta · CG prevod`
+                  : 'Ovaj dokument možda nema dostupan tekstualni transkript (rukopis/karta) — provjeri'}
+              </span>
+            </div>
+          </a>
+        </section>
+
         {item.full_text && (
           <section id="transcript" data-item-id={item.id}>
             <div class="flex items-center justify-between mb-3">

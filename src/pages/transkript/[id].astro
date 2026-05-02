@@ -1,0 +1,197 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getItem, SOURCE_LABELS, SOURCE_COUNTRIES } from '../../lib/supabase';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/');
+const item = await getItem(id);
+if (!item) return new Response('Not found', { status: 404 });
+
+const sourceLabel = SOURCE_LABELS[item.source] ?? item.source;
+const country = SOURCE_COUNTRIES[item.source];
+const dateLabel = item.date_text ?? (item.date_year_min ? String(item.date_year_min) : null);
+const fullText = item.full_text || '';
+const transcriptCg = (item.metadata as any)?.transcript_cg || '';
+
+// Split full text into pages by form-feed (\f) for IA djvu, or by ~3000 char chunks
+const pages = fullText.includes('\f')
+  ? fullText.split('\f').map((p, i) => ({ num: i + 1, text: p.trim() })).filter(p => p.text.length > 50)
+  : fullText.length > 5000
+    ? Array.from({ length: Math.ceil(fullText.length / 5000) }, (_, i) => ({
+        num: i + 1,
+        text: fullText.slice(i * 5000, (i + 1) * 5000),
+      }))
+    : [{ num: 1, text: fullText }];
+
+const iaSourceId = item.source === 'internet_archive' ? item.source_id : null;
+---
+<Layout title={`Transkript: ${item.title.slice(0, 60)} — Arhiva Ulcinj`}>
+  <article class="max-w-5xl mx-auto px-4 py-6">
+    <nav class="text-sm font-sans mb-3 text-ink/60">
+      <a href={`/item/${item.id}`} class="hover:text-venetian">← Detalji rezultata</a> ·
+      <span>Full transkript</span>
+    </nav>
+
+    <header class="mb-4 pb-3 border-b border-gold/40">
+      <h1 class="text-2xl font-semibold leading-tight">{item.title}</h1>
+      <div class="flex flex-wrap gap-2 mt-2 text-xs font-sans">
+        <span class="px-2 py-0.5 bg-venetian/10 text-venetian rounded">{sourceLabel}</span>
+        {country && <span class="px-2 py-0.5 bg-ink/5 rounded">{country.flag} {country.country}</span>}
+        {dateLabel && <span class="px-2 py-0.5 bg-ink/10 rounded">{dateLabel}</span>}
+        {item.author && <span class="px-2 py-0.5 bg-ink/5 rounded">{item.author.slice(0, 60)}</span>}
+        <span class="px-2 py-0.5 bg-gold/20 rounded">{fullText.length.toLocaleString()} karaktera · {pages.length} {pages.length === 1 ? 'strana' : pages.length < 5 ? 'strane' : 'strana'}</span>
+      </div>
+    </header>
+
+    {!fullText && (
+      <div class="p-6 bg-gold/10 border border-gold/40 rounded-sm">
+        <h2 class="font-serif text-lg mb-2">⚠️ Ovaj dokument nema dostupan transkript</h2>
+        <p class="font-sans text-sm text-ink/80 mb-3">
+          Razlozi mogu biti:
+        </p>
+        <ul class="font-sans text-sm text-ink/80 list-disc pl-5 space-y-1">
+          <li><strong>Stari rukopis bez OCR-a</strong> — izvor ima samo skenirane slike, nije proizveden tekstualni transkript</li>
+          <li><strong>Karta ili gravura</strong> — vizuelni dokument bez teksta za čitanje</li>
+          <li><strong>Akademski članak iza paywalla</strong> — apstrakt postoji, full text nije slobodan</li>
+          <li><strong>Connector nije izvukao OCR</strong> — može biti tehnički problem (sledeći weekly cron može pokušati ponovo)</li>
+        </ul>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <a href={item.url_original} target="_blank" rel="noopener"
+             class="px-3 py-1.5 bg-venetian text-parchment rounded-sm text-sm font-sans hover:bg-venetian/90">
+            Otvori original na {sourceLabel} ↗
+          </a>
+          {item.url_iiif && (
+            <a href={`https://projectmirador.org/embed/?iiif-content=${encodeURIComponent(item.url_iiif)}`}
+               target="_blank" rel="noopener"
+               class="px-3 py-1.5 border border-gold/40 bg-white/40 rounded-sm text-sm font-sans hover:bg-white/80">
+              🔍 Otvori sliku u Mirador (IIIF zoom)
+            </a>
+          )}
+        </div>
+      </div>
+    )}
+
+    {fullText && (
+      <>
+        <div class="sticky top-16 z-5 bg-parchment/95 dark:bg-ink/95 backdrop-blur py-2 mb-4 border-b border-gold/40 -mx-4 px-4 flex flex-wrap items-center gap-3 font-sans text-sm">
+          <input
+            type="search"
+            id="search-in-doc"
+            placeholder="🔍 Pretraži u dokumentu..."
+            class="flex-1 min-w-[180px] px-3 py-1.5 border border-gold/40 bg-white dark:bg-ink/30 rounded-sm focus:border-venetian focus:outline-none"
+          />
+          <button id="cg-toggle-btn" type="button"
+                  class={`px-3 py-1.5 ${transcriptCg ? 'bg-venetian text-parchment' : 'border border-gold/40 bg-white/60 dark:bg-ink/30'} rounded-sm hover:opacity-90`}
+                  data-id={item.id}>
+            {transcriptCg ? '🇲🇪 Prikaži CG prevod' : '📜 Prevedi na CG'}
+          </button>
+          <a href={item.url_original} target="_blank" rel="noopener" class="text-venetian hover:underline ml-auto">Original ↗</a>
+        </div>
+
+        <div id="reader" class="space-y-8 font-serif text-base leading-relaxed">
+          {pages.map((p) => (
+            <section class="page-block" data-page={p.num}>
+              <div class="flex items-baseline gap-3 mb-2 font-sans">
+                <h3 class="text-sm uppercase tracking-wider text-ink/60">
+                  {iaSourceId ? (
+                    <a href={`https://archive.org/details/${iaSourceId}/page/n${p.num}`}
+                       target="_blank" rel="noopener" class="hover:text-venetian">
+                      Strana {p.num} ↗
+                    </a>
+                  ) : (
+                    <>Strana {p.num}</>
+                  )}
+                </h3>
+                <span class="text-xs text-ink/50">{p.text.length} kar.</span>
+              </div>
+              <pre class="page-text whitespace-pre-wrap leading-relaxed font-mono text-sm bg-white/40 dark:bg-ink/20 p-4 border border-gold/30 rounded-sm">{p.text}</pre>
+            </section>
+          ))}
+        </div>
+
+        {transcriptCg && (
+          <div id="cg-reader" class="hidden mt-6 space-y-4">
+            <h3 class="font-sans text-sm uppercase tracking-wider text-venetian">🇲🇪 Crnogorski prevod (Claude AI)</h3>
+            <div class="p-4 bg-parchment/60 border border-venetian/40 rounded-sm leading-relaxed">
+              <div set:html={transcriptCg.replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<strong class="text-venetian">$1</strong>')}></div>
+            </div>
+          </div>
+        )}
+
+        <div id="translate-status" class="hidden mt-4 p-3 bg-gold/10 border border-gold/40 rounded-sm font-sans text-sm"></div>
+      </>
+    )}
+  </article>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      // In-document search: highlight matches in <pre>
+      const search = document.getElementById('search-in-doc');
+      if (search) {
+        search.addEventListener('input', () => {
+          const term = search.value.trim();
+          document.querySelectorAll('.page-text').forEach((pre) => {
+            const original = pre.dataset.original || pre.textContent;
+            if (!pre.dataset.original) pre.dataset.original = original;
+            if (!term || term.length < 2) {
+              pre.textContent = original;
+              return;
+            }
+            const re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            pre.innerHTML = original.replace(re, '<mark class="bg-gold/40 px-0.5">$1</mark>');
+          });
+        });
+      }
+
+      // CG translate button
+      const cgBtn = document.getElementById('cg-toggle-btn');
+      const cgReader = document.getElementById('cg-reader');
+      const reader = document.getElementById('reader');
+      const status = document.getElementById('translate-status');
+
+      function showStatus(msg, isErr) {
+        if (!status) return;
+        status.classList.remove('hidden');
+        status.textContent = msg;
+        status.className = `mt-4 p-3 border rounded-sm font-sans text-sm ${isErr ? 'bg-venetian/10 border-venetian text-venetian' : 'bg-gold/10 border-gold/40'}`;
+      }
+
+      if (cgBtn && cgReader && reader) {
+        // Already translated — toggle visibility
+        cgBtn.addEventListener('click', async () => {
+          if (!cgReader.classList.contains('hidden')) {
+            cgReader.classList.add('hidden');
+            reader.style.display = '';
+            cgBtn.textContent = '🇲🇪 Prikaži CG prevod';
+            return;
+          }
+          if (cgReader.dataset.loaded === '1') {
+            cgReader.classList.remove('hidden');
+            reader.style.display = 'none';
+            cgBtn.textContent = '🔤 Prikaži original';
+            return;
+          }
+          // Need to translate
+          cgBtn.disabled = true;
+          cgBtn.textContent = '⏳ Prevodim...';
+          showStatus('Šaljem tekst Claude AI servisu — prvi put traje ~10-30s. Sledeći put će biti instant.', false);
+          try {
+            const r = await fetch('/api/translate-cg', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: cgBtn.dataset.id }),
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+            showStatus(`✓ Prevod gotov. Refresh-ujem stranu...`, false);
+            setTimeout(() => location.reload(), 1500);
+          } catch (e) {
+            showStatus('Greška: ' + e.message, true);
+            cgBtn.disabled = false;
+            cgBtn.textContent = '📜 Prevedi na CG';
+          }
+        });
+      }
+    });
+  </script>
+</Layout>
