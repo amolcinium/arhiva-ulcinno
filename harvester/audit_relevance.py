@@ -44,14 +44,18 @@ PROBLEMATIC_LOCATIONS = {
     "venetian_albania", "duklja_zeta", "skadarsko_jezero", "crmnica", "mrkovici"
 }
 
-# Ulcinj anchor terms — case-insensitive search in title+snippet+full_text.
+# Ulcinj anchor terms — STRICT, only direct name variants.
+# Removed broader terms (Adriatic, Mletačka Albanija) — they let through
+# unrelated content like Slovenian Krajna villages, Carniolia maps.
 ANCHOR_TERMS = [
-    "Ulcinj", "Ulqin", "Olcinium", "Olchinium", "Olcynium", "Colchinium",
-    "Dulcigno", "Dolcigno", "Dulcignum", "Ulcinium",
-    "Ülgün", "Olgun",  # Ottoman
-    "Олcинj", "Улцињ",  # Cyrillic Slavic
-    "Ολκίνιον",  # Greek
-    "Adriatic", "Adriatico", "Mletačka Albanija", "Albania Veneta",  # broader contextual
+    "Ulcinj", "Ulqin", "Ulqini", "Ulqinaku",
+    "Olcinium", "Olchinium", "Olcynium", "Colchinium", "Olcinia", "Olcinj",
+    "Vicinium", "Lucinium", "Ulcinium",
+    "Dulcigno", "Dolcigno", "Dulcignum", "Dulcinium", "Dulcignano", "Dulcinj",
+    "Ülgün", "Olgun", "Ülkün",  # Ottoman
+    "Улцињ", "Улцин", "Ольцин",  # Cyrillic Slavic
+    "Ολκίνιον", "Ολχίνιον", "Δουλκίνιον",  # Greek
+    "Ulciniates", "Olcinitanus",  # Latin demonym
 ]
 ANCHOR_RE = re.compile("|".join(re.escape(t) for t in ANCHOR_TERMS), re.IGNORECASE)
 
