@@ -1,0 +1,176 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { supabase, SOURCE_LABELS, LOCATIONS } from '../lib/supabase';
+
+// Total count + count by source
+const { data: bySourceData } = await supabase
+  .from('archive_results_public')
+  .select('source');
+
+const sourceCount: Record<string, number> = {};
+for (const row of (bySourceData ?? []) as { source: string }[]) {
+  sourceCount[row.source] = (sourceCount[row.source] ?? 0) + 1;
+}
+const total = Object.values(sourceCount).reduce((a, b) => a + b, 0);
+const sourcesSorted = Object.entries(sourceCount).sort((a, b) => b[1] - a[1]);
+const maxSourceCount = sourcesSorted[0]?.[1] ?? 1;
+
+// Distribution by century
+const { data: yearData } = await supabase
+  .from('archive_results_public')
+  .select('date_year_min')
+  .not('date_year_min', 'is', null);
+
+const centuryCount: Record<number, number> = {};
+for (const row of (yearData ?? []) as { date_year_min: number }[]) {
+  const c = Math.floor(row.date_year_min / 100) * 100;
+  centuryCount[c] = (centuryCount[c] ?? 0) + 1;
+}
+const centuriesSorted = Object.entries(centuryCount)
+  .map(([k, v]) => ({ century: Number(k), count: v }))
+  .sort((a, b) => a.century - b.century);
+const maxCenturyCount = Math.max(...centuriesSorted.map((c) => c.count), 1);
+
+function centuryLabel(c: number): string {
+  if (c < 0) return `${Math.abs(c)} BC`;
+  if (c === 0) return '1–99';
+  return `${c}s`;
+}
+
+function eraColor(c: number): string {
+  if (c < 0) return '#8b5e3c';
+  if (c < 500) return '#b45309';
+  if (c < 1400) return '#6b7280';
+  if (c < 1800) return '#1d4ed8';
+  return '#065f46';
+}
+
+// Top 10 most-populated locations
+const { data: locData } = await supabase
+  .from('archive_results_public')
+  .select('location')
+  .not('location', 'is', null);
+
+const locationCount: Record<string, number> = {};
+for (const row of (locData ?? []) as { location: string }[]) {
+  locationCount[row.location] = (locationCount[row.location] ?? 0) + 1;
+}
+const topLocations = Object.entries(locationCount)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 10);
+const maxLocCount = topLocations[0]?.[1] ?? 1;
+
+function locationLabel(key: string): string {
+  return LOCATIONS.find((l) => l.key === key)?.label ?? key;
+}
+
+// Coverage gaps: sources with <30 records
+const thinSources = sourcesSorted.filter(([, n]) => n < 30);
+
+// Recent growth: records added in last 7 days
+const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+const { count: recentCount } = await supabase
+  .from('archive_results_public')
+  .select('id', { count: 'exact', head: true })
+  .gte('fetched_at', sevenDaysAgo);
+---
+<Layout title="Statistika — Arhiva Ulcinj" description="Pregled pokrivenosti arhivskih izvora i distribucija zapisa po vijekovima.">
+  <div class="max-w-5xl mx-auto px-4 py-10">
+    <h1 class="text-3xl font-semibold mb-2">Statistika arhive</h1>
+    <p class="text-ink/60 font-sans text-sm mb-8">
+      Ukupno <strong class="text-venetian text-lg">{total.toLocaleString()}</strong> zapisa iz {sourcesSorted.length} izvora.
+      {recentCount !== null && recentCount > 0 && (
+        <> Dodato posljednjih 7 dana: <strong class="text-venetian">{recentCount}</strong>.</>
+      )}
+    </p>
+
+    <!-- Sources bar chart -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-4 border-b border-gold/40 pb-2">Zapisi po izvoru</h2>
+      <div class="space-y-2 font-sans text-sm">
+        {sourcesSorted.map(([src, n]) => (
+          <div class="flex items-center gap-3">
+            <a href={`/?source=${src}`} class="w-52 shrink-0 text-right text-ink/80 hover:text-venetian truncate" title={SOURCE_LABELS[src] ?? src}>
+              {SOURCE_LABELS[src] ?? src}
+            </a>
+            <div class="flex-1 bg-gold/10 rounded-sm overflow-hidden h-5">
+              <div
+                class="h-5 bg-venetian/70 rounded-sm transition-all"
+                style={`width:${Math.round((n / maxSourceCount) * 100)}%`}
+              />
+            </div>
+            <span class="w-10 text-right text-ink/60">{n}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Century distribution -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-4 border-b border-gold/40 pb-2">Distribucija po vijeku</h2>
+      <div class="flex items-end gap-1 overflow-x-auto pb-4" style="min-height:120px">
+        {centuriesSorted.map(({ century, count }) => {
+          const heightPct = Math.round((Math.log(count + 1) / Math.log(maxCenturyCount + 1)) * 100);
+          const color = eraColor(century);
+          const link = `/?yearMin=${century}&yearMax=${century + 99}`;
+          return (
+            <a
+              href={link}
+              title={`${centuryLabel(century)}: ${count} zapisa`}
+              class="flex flex-col items-center gap-1 group shrink-0"
+              style="width:36px"
+            >
+              <span class="text-[9px] font-sans text-ink/50 group-hover:text-venetian text-center leading-tight">
+                {count}
+              </span>
+              <div
+                class="w-full rounded-t-sm transition-opacity group-hover:opacity-80"
+                style={`height:${Math.max(4, Math.round(heightPct * 0.9))}px; background:${color};`}
+              />
+              <span class="text-[8px] font-sans text-ink/40 group-hover:text-venetian text-center leading-tight">
+                {centuryLabel(century)}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+      <p class="text-xs font-sans text-ink/50 mt-1">Visina = log-skala. Klikni na stub za pretragu tog vijeka.</p>
+    </section>
+
+    <!-- Top locations -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-4 border-b border-gold/40 pb-2">Top 10 lokacija</h2>
+      <div class="space-y-2 font-sans text-sm">
+        {topLocations.map(([loc, n]) => (
+          <div class="flex items-center gap-3">
+            <a href={`/?location=${loc}`} class="w-52 shrink-0 text-right text-ink/80 hover:text-venetian truncate" title={locationLabel(loc)}>
+              {locationLabel(loc)}
+            </a>
+            <div class="flex-1 bg-gold/10 rounded-sm overflow-hidden h-5">
+              <div
+                class="h-5 bg-blue-600/60 rounded-sm"
+                style={`width:${Math.round((n / maxLocCount) * 100)}%`}
+              />
+            </div>
+            <span class="w-10 text-right text-ink/60">{n}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Coverage gaps -->
+    {thinSources.length > 0 && (
+      <section class="mb-12">
+        <h2 class="text-xl font-semibold mb-4 border-b border-gold/40 pb-2">Slabo pokriveni izvori (&lt;30 zapisa)</h2>
+        <div class="flex flex-wrap gap-2 font-sans text-sm">
+          {thinSources.map(([src, n]) => (
+            <a href={`/?source=${src}`} class="px-3 py-1 border border-gold/40 bg-white/60 rounded-sm hover:border-venetian hover:text-venetian">
+              {SOURCE_LABELS[src] ?? src}: <strong>{n}</strong>
+            </a>
+          ))}
+        </div>
+        <p class="mt-3 text-xs font-sans text-ink/50">Izvor s 0 zapisa: connector vjerovatno nije potvrdio live endpoint — provjeri harvest log.</p>
+      </section>
+    )}
+  </div>
+</Layout>
