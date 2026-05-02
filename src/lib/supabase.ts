@@ -40,6 +40,13 @@ export const SOURCE_LABELS: Record<string, string> = {
   openlibrary: 'Open Library',
   nb_no: 'Norwegian National Library',
   smithsonian: 'Smithsonian',
+  openaire: 'OpenAIRE (EU akademski)',
+  openalex: 'OpenAlex (scholarly graph)',
+  doaj: 'DOAJ (open access journals)',
+  zenodo: 'Zenodo (CERN repozitorij)',
+  core: 'CORE.ac.uk (akademski agregator)',
+  rumsey: 'David Rumsey (istorijske karte)',
+  ape: 'Archives Portal Europe',
   digivatlib: 'DigiVatLib (Vatikan)',
   antenati: 'Antenati (Italija)',
   edr: 'EDR (Roma)',
@@ -55,6 +62,13 @@ export const SOURCE_LABELS: Record<string, string> = {
  * Helps user quickly spot which national archive a record comes from.
  */
 export const SOURCE_COUNTRIES: Record<string, { flag: string; country: string }> = {
+  openaire:         { flag: '🇪🇺', country: 'EU akademski (OpenAIRE)' },
+  openalex:         { flag: '🌍', country: 'Internacionalni (OpenAlex)' },
+  doaj:             { flag: '🇬🇧', country: 'Velika Britanija (DOAJ)' },
+  zenodo:           { flag: '🇨🇭', country: 'CERN/Švajcarska (Zenodo)' },
+  core:             { flag: '🇬🇧', country: 'Velika Britanija (CORE)' },
+  rumsey:           { flag: '🇺🇸', country: 'SAD (David Rumsey karte)' },
+  ape:              { flag: '🇪🇺', country: 'Archives Portal Europe' },
   europeana:        { flag: '🇪🇺', country: 'EU agregator' },
   internet_archive: { flag: '🇺🇸', country: 'SAD' },
   edh:              { flag: '🇩🇪', country: 'Njemačka (Heidelberg)' },

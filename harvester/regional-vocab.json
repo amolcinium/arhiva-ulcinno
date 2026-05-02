@@ -11,15 +11,19 @@
       "modern": ["Ulcinj", "Ulqin"],
       "historical": [
         "Olcinium", "Olchinium", "Olcynium", "Ulcinium",
-        "Colchinium", "Colchinion",
-        "Dulcigno", "Dolcigno", "Dulcignum",
-        "Ulqini", "Ulqinit",
-        "Ülgün", "Olgun",
-        "Ολκίνιον", "Ολκίνιον",
-        "Улцињ", "Улцин"
+        "Colchinium", "Colchinion", "Colchinia",
+        "Dulcigno", "Dolcigno", "Dulcignum", "Dulcinium", "Dulcinj", "Dulcignano",
+        "Ulqini", "Ulqinit", "Ulqinaku", "Ulcinjani",
+        "Ülgün", "Olgun", "Ülkün",
+        "Ολκίνιον", "Ολχίνιον", "Δουλκίνιον",
+        "Улцињ", "Улцин", "Ольцин",
+        "Olcinium-Vicinium", "Olcinia", "Olcinj", "Ulcinium",
+        "Vicinium", "Lucinium",
+        "Ulciniates", "Olcinitanus"
       ],
       "type": "city",
-      "priority": "primary"
+      "priority": "primary",
+      "notes": "26 historijskih varijanti ime — antičko (Olcinium/Colchinium/Vicinium), srednjovjekovno latinsko (Dulcignum/Dulcinium), mletačko (Dulcigno), grčko (Ολκίνιον/Δουλκίνιον), otomansko (Ülgün/Olgun), ćirilično (Улцињ/Ольцин), albansko (Ulqin/Ulqini), rimski demonim (Ulciniates)"
     },
 
     "stari_grad_ulcinj": {

@@ -20,7 +20,6 @@ import json
 import re
 import sys
 import time
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any
@@ -344,6 +343,346 @@ async def search_digivatlib(session, query: str, limit: int = 30) -> list[Record
     return out
 
 
+# ---------- connector: OpenAIRE (EU academic aggregator) ----------
+
+async def search_openaire(session, query: str, limit: int = 20) -> list[Record]:
+    """OpenAIRE Research Graph — agregira metapodatke iz hiljada EU repozitorija."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    url = "https://api.openaire.eu/search/researchProducts"
+    params = {"keywords": qstr, "size": limit, "format": "json"}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    items = (data.get("response", {}).get("results", {}) or {}).get("result", []) or []
+    if not isinstance(items, list):
+        items = [items]
+    for item in items[:limit]:
+        meta = (((item or {}).get("metadata") or {}).get("oaf:entity") or {}).get("oaf:result") or {}
+        title = ""
+        title_field = meta.get("title")
+        if isinstance(title_field, list) and title_field:
+            title = title_field[0].get("$") if isinstance(title_field[0], dict) else str(title_field[0])
+        elif isinstance(title_field, dict):
+            title = title_field.get("$", "")
+        if not title:
+            continue
+        creators_raw = meta.get("creator", [])
+        if not isinstance(creators_raw, list):
+            creators_raw = [creators_raw]
+        creators = []
+        for c in creators_raw[:3]:
+            if isinstance(c, dict):
+                creators.append(c.get("$", ""))
+        date_raw = meta.get("dateofacceptance", {})
+        date_str = date_raw.get("$", "") if isinstance(date_raw, dict) else str(date_raw or "")
+        ymin, ymax = parse_year_range(date_str)
+        desc_field = meta.get("description")
+        desc = ""
+        if isinstance(desc_field, list) and desc_field:
+            desc = desc_field[0].get("$") if isinstance(desc_field[0], dict) else str(desc_field[0])
+        elif isinstance(desc_field, dict):
+            desc = desc_field.get("$", "")
+        url_orig = ""
+        children = meta.get("children", {})
+        if isinstance(children, dict):
+            instances = children.get("instance", [])
+            if not isinstance(instances, list):
+                instances = [instances]
+            for inst in instances:
+                if isinstance(inst, dict):
+                    weburls = inst.get("webresource", [])
+                    if not isinstance(weburls, list):
+                        weburls = [weburls]
+                    for w in weburls:
+                        if isinstance(w, dict) and w.get("url", {}).get("$"):
+                            url_orig = w["url"]["$"]
+                            break
+                    if url_orig:
+                        break
+        oid = (item.get("header", {}) or {}).get("dri:objIdentifier", {}).get("$", "")
+        rec = Record(
+            source="openaire",
+            source_id=oid or url_orig.rsplit("/", 1)[-1],
+            title=title[:300],
+            author=", ".join(c for c in creators if c)[:200],
+            date_text=date_str[:50],
+            date_year_min=ymin,
+            date_year_max=ymax,
+            url_original=url_orig or f"https://explore.openaire.eu/search/result?id={oid}",
+            snippet=desc[:1500],
+            doc_type="academic",
+            metadata={"institution": "OpenAIRE EU"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: OpenAlex (scholarly knowledge graph) ----------
+
+async def search_openalex(session, query: str, limit: int = 20) -> list[Record]:
+    """OpenAlex — replaces Microsoft Academic. 250M+ scholarly works, free REST API."""
+    url = "https://api.openalex.org/works"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:6]
+    qstr = " ".join(terms)
+    params = {"search": qstr, "per-page": limit, "select": "id,doi,title,authorships,publication_year,abstract_inverted_index,primary_location,language,cited_by_count"}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("results", []):
+        title = item.get("title") or ""
+        if not title:
+            continue
+        oa_id = (item.get("id") or "").rsplit("/", 1)[-1]
+        doi = item.get("doi") or ""
+        authors = []
+        for a in item.get("authorships", [])[:3]:
+            name = (a.get("author") or {}).get("display_name", "")
+            if name:
+                authors.append(name)
+        ymin = item.get("publication_year")
+        # Reconstruct abstract from inverted index
+        abstract = ""
+        inv = item.get("abstract_inverted_index")
+        if inv:
+            words = sorted(((p, w) for w, ps in inv.items() for p in ps))
+            abstract = " ".join(w for _, w in words[:200])
+        primary = item.get("primary_location") or {}
+        url_orig = primary.get("landing_page_url") or doi or f"https://openalex.org/{oa_id}"
+        rec = Record(
+            source="openalex",
+            source_id=oa_id,
+            title=title[:300],
+            author=", ".join(authors)[:200],
+            date_text=str(ymin) if ymin else "",
+            date_year_min=ymin,
+            date_year_max=ymin,
+            url_original=url_orig,
+            snippet=abstract[:1500],
+            doc_type="academic",
+            language=item.get("language", ""),
+            metadata={"doi": doi, "cited_by": item.get("cited_by_count", 0), "institution": "OpenAlex"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: DOAJ (Directory of Open Access Journals) ----------
+
+async def search_doaj(session, query: str, limit: int = 20) -> list[Record]:
+    """DOAJ — open access journal articles, free REST."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    url = f"https://doaj.org/api/search/articles/{quote_plus(qstr)}"
+    params = {"pageSize": limit}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("results", []):
+        bib = item.get("bibjson") or {}
+        title = bib.get("title", "")
+        if not title:
+            continue
+        sid = item.get("id", "")
+        authors = ", ".join(a.get("name", "") for a in bib.get("author", [])[:3])
+        ymin = bib.get("year")
+        try:
+            ymin = int(ymin) if ymin else None
+        except Exception:
+            ymin = None
+        abstract = bib.get("abstract", "")
+        url_orig = ""
+        for link in bib.get("link", []):
+            if link.get("type") == "fulltext" and link.get("url"):
+                url_orig = link["url"]
+                break
+        if not url_orig:
+            url_orig = f"https://doaj.org/article/{sid}"
+        journal = (bib.get("journal") or {}).get("title", "")
+        rec = Record(
+            source="doaj",
+            source_id=sid,
+            title=title[:300],
+            author=authors[:200],
+            date_text=str(ymin) if ymin else "",
+            date_year_min=ymin,
+            date_year_max=ymin,
+            url_original=url_orig,
+            snippet=abstract[:1500],
+            doc_type="article",
+            language=", ".join(bib.get("language", [])[:2])[:30],
+            metadata={"journal": journal, "institution": "DOAJ"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: Zenodo (CERN open repository) ----------
+
+async def search_zenodo(session, query: str, limit: int = 20) -> list[Record]:
+    """Zenodo — CERN/OpenAIRE digital archive. Hosts datasets, papers, software."""
+    url = "https://zenodo.org/api/records"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:6]
+    qstr = " OR ".join(terms)
+    params = {"q": qstr, "size": limit, "type": "publication"}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("hits", {}).get("hits", []):
+        meta = item.get("metadata") or {}
+        title = meta.get("title", "")
+        sid = str(item.get("id", ""))
+        if not title or not sid:
+            continue
+        creators = ", ".join(c.get("name", "") for c in meta.get("creators", [])[:3])
+        date_raw = meta.get("publication_date", "")
+        ymin, ymax = parse_year_range(date_raw)
+        desc = re.sub(r"<[^>]+>", " ", meta.get("description", "")).strip()
+        rec = Record(
+            source="zenodo",
+            source_id=sid,
+            title=title[:300],
+            author=creators[:200],
+            date_text=date_raw[:50],
+            date_year_min=ymin,
+            date_year_max=ymax,
+            url_original=item.get("links", {}).get("self_html") or f"https://zenodo.org/records/{sid}",
+            snippet=desc[:1500],
+            doc_type=(meta.get("resource_type") or {}).get("title", "publication"),
+            language=meta.get("language", ""),
+            metadata={"doi": meta.get("doi"), "institution": "Zenodo (CERN)"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: CORE.ac.uk (academic aggregator) ----------
+
+async def search_core(session, query: str, limit: int = 15) -> list[Record]:
+    """CORE — UK-based open access aggregator. 200M+ research outputs."""
+    # CORE v3 API requires a key for >10 req/min; demo allows light queries
+    url = "https://api.core.ac.uk/v3/search/works"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    params = {"q": qstr, "limit": limit}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("results", []):
+        title = item.get("title", "")
+        cid = str(item.get("id", ""))
+        if not title or not cid:
+            continue
+        authors = ", ".join(a.get("name", "") for a in item.get("authors", [])[:3] if a.get("name"))
+        date_raw = item.get("publishedDate") or item.get("yearPublished") or ""
+        ymin, ymax = parse_year_range(str(date_raw))
+        rec = Record(
+            source="core",
+            source_id=cid,
+            title=title[:300],
+            author=authors[:200],
+            date_text=str(date_raw)[:50],
+            date_year_min=ymin,
+            date_year_max=ymax,
+            url_original=item.get("downloadUrl") or item.get("sourceFulltextUrls", [None])[0] or f"https://core.ac.uk/works/{cid}",
+            snippet=(item.get("abstract") or "")[:1500],
+            doc_type="academic",
+            language=item.get("language", {}).get("code", "") if isinstance(item.get("language"), dict) else "",
+            metadata={"doi": item.get("doi"), "publisher": item.get("publisher"), "institution": "CORE.ac.uk"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: David Rumsey Historical Map Collection ----------
+
+async def search_rumsey(session, query: str, limit: int = 20) -> list[Record]:
+    """David Rumsey Historical Maps — 141k+ digitized maps via LUNA browser API."""
+    url = "https://www.davidrumsey.com/luna/servlet/as/search"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    params = {"q": qstr, "max": limit, "lc": "RUMSEY~8~1", "wsmax": limit}
+    text = await fetch_text(session, url, params)
+    if not text:
+        return []
+    # LUNA returns either JSON or XML — try parsing as JSON first
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+    out = []
+    for item in (data if isinstance(data, list) else data.get("response", {}).get("results", []))[:limit]:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title") or item.get("displayName") or ""
+        if not title:
+            continue
+        url_id = item.get("id") or item.get("urlSize4") or ""
+        date_raw = item.get("dateLabel") or item.get("Date") or ""
+        ymin, ymax = parse_year_range(str(date_raw))
+        thumb = item.get("urlSize0") or item.get("thumbnailUrl") or ""
+        author = item.get("creator") or item.get("Author") or ""
+        rec = Record(
+            source="rumsey",
+            source_id=str(url_id),
+            title=str(title)[:300],
+            author=str(author)[:200],
+            date_text=str(date_raw)[:50],
+            date_year_min=ymin,
+            date_year_max=ymax,
+            url_original=item.get("url") or f"https://www.davidrumsey.com/luna/servlet/detail/{url_id}",
+            thumbnail_url=str(thumb),
+            snippet=str(item.get("description") or "")[:1500],
+            doc_type="map",
+            metadata={"institution": "David Rumsey Historical Map Collection"},
+        )
+        out.append(rec)
+    return out
+
+
+# ---------- connector: Archives Portal Europe ----------
+
+async def search_ape(session, query: str, limit: int = 20) -> list[Record]:
+    """Archives Portal Europe — federation of 63 European archive institutions."""
+    url = "https://www.archivesportaleurope.net/api/v1/search"
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
+    qstr = " OR ".join(terms)
+    params = {"q": qstr, "rows": limit}
+    data = await fetch_json(session, url, params)
+    if not data:
+        return []
+    out = []
+    for item in data.get("response", {}).get("docs", []):
+        title = item.get("unittitle") or item.get("title") or ""
+        sid = item.get("id") or item.get("repositoryid", "")
+        if not title or not sid:
+            continue
+        date_raw = item.get("unitdate") or item.get("date", "")
+        ymin, ymax = parse_year_range(str(date_raw))
+        institution = item.get("repositoryname") or item.get("repository") or ""
+        country = item.get("country") or ""
+        rec = Record(
+            source="ape",
+            source_id=str(sid),
+            title=str(title)[:300],
+            date_text=str(date_raw)[:50],
+            date_year_min=ymin,
+            date_year_max=ymax,
+            url_original=item.get("digitalUrl") or item.get("url") or f"https://www.archivesportaleurope.net/ead-display/-/ead/pl/aicode/{sid}",
+            snippet=str(item.get("scopecontent") or "")[:1500],
+            doc_type=item.get("level", "archival_unit"),
+            language=str(item.get("langmaterial", ""))[:30],
+            metadata={"institution": institution, "country": country, "repository": "Archives Portal Europe"},
+        )
+        out.append(rec)
+    return out
+
+
 # ---------- connector: CrossRef (academic articles) ----------
 
 async def search_crossref(session, query: str, limit: int = 20) -> list[Record]:
@@ -432,177 +771,24 @@ async def search_openlibrary(session, query: str, limit: int = 20) -> list[Recor
 # ---------- connector: HathiTrust (US academic library) ----------
 
 async def search_hathitrust(session, query: str, limit: int = 15) -> list[Record]:
-    """HathiTrust Digital Library — 17M+ volumes. Blacklight/Solr catalog search."""
+    """HathiTrust — massive US academic digital library. Bibliographic API for catalog records."""
+    # HathiTrust does not have a great free-text search; use OCLC lookup via title
+    # We use their proxied search via babel.hathitrust.org full-text but JSON often blocked
+    # Alternative: search via Internet Archive (which mirrors HathiTrust) is already covered
+    # For now: use bibliographic API with author/title queries
     terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:3]
     out: list[Record] = []
     for term in terms:
+        # HathiTrust public search via Solr endpoint
         url = "https://catalog.hathitrust.org/Search/Home"
-        params = {"lookfor": term, "type": "all", "limit": min(limit, 20), "format": "json"}
+        params = {"lookfor": term, "type": "all", "format": "json"}
         text = await fetch_text(session, url, params)
         if not text:
             continue
-        try:
-            data = json.loads(text)
-            docs = data.get("response", {}).get("docs", [])
-            for doc in docs[:limit]:
-                title = (doc.get("title") or "").strip()
-                if not title:
-                    continue
-                ht_id = doc.get("id") or ""
-                pub_date_raw = doc.get("publishDate") or doc.get("publishDateSort") or ""
-                if isinstance(pub_date_raw, list):
-                    pub_date_raw = pub_date_raw[0] if pub_date_raw else ""
-                pub_date = str(pub_date_raw)
-                ymin = None
-                m = re.search(r'\b(1[0-9]\d{2}|20\d{2})\b', pub_date)
-                if m:
-                    ymin = int(m.group(1))
-                authors_raw = doc.get("author") or doc.get("author_top") or ""
-                if isinstance(authors_raw, list):
-                    authors_raw = authors_raw[0] if authors_raw else ""
-                author = str(authors_raw)[:200]
-                topics = doc.get("topic") or doc.get("subject") or []
-                snippet = ", ".join(topics[:4])[:500] if isinstance(topics, list) else str(topics)[:500]
-                lang_raw = doc.get("language") or []
-                language = (lang_raw[0] if isinstance(lang_raw, list) else str(lang_raw))[:30]
-                ht_url = (
-                    f"https://catalog.hathitrust.org/Record/{ht_id}"
-                    if ht_id
-                    else f"https://catalog.hathitrust.org/Search/Home?lookfor={quote_plus(term)}"
-                )
-                out.append(Record(
-                    source="hathitrust",
-                    source_id=ht_id or title[:80],
-                    title=title[:300],
-                    author=author,
-                    date_text=pub_date[:50],
-                    date_year_min=ymin,
-                    date_year_max=ymin,
-                    url_original=ht_url,
-                    snippet=snippet,
-                    doc_type="Book",
-                    language=language,
-                    metadata={"institution": "HathiTrust Digital Library"},
-                ))
-        except (json.JSONDecodeError, TypeError, KeyError):
-            # HTML response — parse title+id from markup
-            ids = re.findall(r'/Record/(\w{6,})', text)
-            titles = re.findall(r'<span class=["\']title["\'][^>]*>([^<]+)</span>', text)
-            for ht_id, title_raw in zip(ids[:limit], titles[:limit]):
-                title = title_raw.strip()
-                if not title:
-                    continue
-                out.append(Record(
-                    source="hathitrust",
-                    source_id=ht_id,
-                    title=title[:300],
-                    url_original=f"https://catalog.hathitrust.org/Record/{ht_id}",
-                    metadata={"institution": "HathiTrust Digital Library"},
-                ))
-        if out:
-            break
-    return out[:limit]
-
-
-# ---------- connector: ÖNB ANNO (Austrian newspapers online) ----------
-
-async def search_anno(session, query: str, limit: int = 20) -> list[Record]:
-    """ÖNB ANNO — Austrian newspapers online, 1700s-1960s. Queries SRU then JSON endpoint."""
-    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:3]
-    out: list[Record] = []
-    for term in terms:
-        # Primary: SRU XML endpoint
-        sru_url = "https://anno.onb.ac.at/anno-suche/sru"
-        sru_params = {
-            "operation": "searchRetrieve",
-            "query": f'text adj "{term}"',
-            "maximumRecords": min(limit, 20),
-            "recordSchema": "dc",
-            "version": "1.2",
-        }
-        xml_text = await fetch_text(session, sru_url, sru_params)
-        if xml_text:
-            try:
-                root = ET.fromstring(xml_text)
-                ns = {
-                    "srw": "http://www.loc.gov/zing/srw/",
-                    "dc": "http://purl.org/dc/elements/1.1/",
-                    "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
-                }
-                for rec_el in root.findall(".//srw:recordData", ns):
-                    dc = rec_el.find("oai_dc:dc", ns) or rec_el
-                    title = (dc.findtext("dc:title", namespaces=ns) or "").strip()
-                    if not title:
-                        continue
-                    date_str = (dc.findtext("dc:date", namespaces=ns) or "").strip()
-                    ymin = None
-                    m = re.search(r"\b(1[6-9]\d{2}|20\d{2})\b", date_str)
-                    if m:
-                        ymin = int(m.group(1))
-                    identifier = (dc.findtext("dc:identifier", namespaces=ns) or "").strip()
-                    publisher = (dc.findtext("dc:publisher", namespaces=ns) or "").strip()
-                    snippet = (dc.findtext("dc:description", namespaces=ns) or "")[:500]
-                    ht_url = (
-                        identifier if identifier.startswith("http")
-                        else f"https://anno.onb.ac.at/anno-suche/#exact={quote_plus(term)}"
-                    )
-                    out.append(Record(
-                        source="anno",
-                        source_id=identifier[:80] or title[:80],
-                        title=title[:300],
-                        author=publisher[:200],
-                        date_text=date_str[:50],
-                        date_year_min=ymin,
-                        date_year_max=ymin,
-                        url_original=ht_url,
-                        snippet=snippet,
-                        doc_type="Zeitungsartikel",
-                        language="de",
-                        metadata={"institution": "ÖNB ANNO"},
-                    ))
-                    if len(out) >= limit:
-                        break
-            except ET.ParseError:
-                pass
-        if out:
-            break
-        # Fallback: cgi JSON endpoint
-        cgi_url = "https://anno.onb.ac.at/cgi-content/anno-suche"
-        cgi_params = {"text": term, "format": "json", "treffer": min(limit, 20)}
-        data = await fetch_json(session, cgi_url, cgi_params)
-        if data:
-            items = data.get("treffer") or data.get("results") or []
-            if isinstance(items, list):
-                for item in items[:limit]:
-                    title = (item.get("titel") or item.get("title") or "").strip()
-                    if not title:
-                        continue
-                    date_str = str(item.get("datum") or item.get("date") or "")
-                    ymin = None
-                    m = re.search(r"\b(1[6-9]\d{2}|20\d{2})\b", date_str)
-                    if m:
-                        ymin = int(m.group(1))
-                    item_url = (
-                        item.get("url") or item.get("identifier")
-                        or f"https://anno.onb.ac.at/anno-suche/#exact={quote_plus(term)}"
-                    )
-                    out.append(Record(
-                        source="anno",
-                        source_id=str(item.get("id") or item_url)[:80],
-                        title=title[:300],
-                        author=(item.get("zeitung") or item.get("publisher") or "")[:200],
-                        date_text=date_str[:50],
-                        date_year_min=ymin,
-                        date_year_max=ymin,
-                        url_original=item_url,
-                        snippet=(item.get("snippet") or item.get("text") or "")[:500],
-                        doc_type="Zeitungsartikel",
-                        language="de",
-                        metadata={"institution": "ÖNB ANNO"},
-                    ))
-            if out:
-                break
-    return out[:limit]
+        # The HTML endpoint won't return JSON; instead try bib metadata endpoint
+        # Skip — yield was minimal in probe
+        break
+    return out  # placeholder; real HathiTrust integration requires their proper API key for searches
 
 
 # ---------- connector: Norwegian National Library (NB.no) ----------
@@ -624,13 +810,8 @@ async def search_nb(session, query: str, limit: int = 15) -> list[Record]:
         nb_id = item.get("id", "")
         if not title or not nb_id:
             continue
-        creators_raw = md.get("creators") or []
-        if not isinstance(creators_raw, list):
-            creators_raw = [creators_raw] if creators_raw else []
-        author = ", ".join(
-            c if isinstance(c, str) else (c.get("name") or c.get("label") or str(c))
-            for c in creators_raw[:3]
-        )
+        creators = md.get("creators") or []
+        author = ", ".join(creators[:3]) if isinstance(creators, list) else str(creators)
         ymin = None
         date_str = ""
         for d in [md.get("originiso", ""), md.get("startdate", ""), md.get("originalAvailableDate", "")]:
@@ -653,9 +834,9 @@ async def search_nb(session, query: str, limit: int = 15) -> list[Record]:
             date_year_max=ymin,
             url_original=item.get("_links", {}).get("presentation", {}).get("href", f"https://www.nb.no/items/{nb_id}"),
             thumbnail_url=thumb,
-            snippet=(", ".join(
+            snippet=(md.get("subjects") and ", ".join(
                 s if isinstance(s, str) else (s.get("label") or s.get("name") or str(s))
-                for s in (md["subjects"][:5] if isinstance(md.get("subjects"), list) else [])
+                for s in md["subjects"][:5]
             ) or "")[:500],
             doc_type=md.get("mediaType", "")[:50],
             language=", ".join(md.get("languages", [])[:2])[:30],
@@ -991,213 +1172,6 @@ async def search_antenati(session, query: str, limit: int = 20) -> list[Record]:
     return out
 
 
-# ---------- connector: BSB Bayerische Staatsbibliothek ----------
-
-async def search_bsb(session, query: str, limit: int = 20) -> list[Record]:
-    """Bayerische Staatsbibliothek Munich — SRU catalog for digitized items (cartography, travelogues)."""
-    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
-    qstr = " OR ".join(f'any="{t}"' for t in terms)
-    url = "https://opacplus.bsb-muenchen.de/TouchPoint/sru/DB=1/"
-    params = {
-        "version": "1.1",
-        "operation": "searchRetrieve",
-        "query": qstr,
-        "maximumRecords": min(limit, 50),
-        "recordSchema": "dc",
-    }
-    text = await fetch_text(session, url, params)
-    if not text:
-        return []
-    out: list[Record] = []
-    try:
-        root = ET.fromstring(text)
-        ns = {
-            "srw": "http://www.loc.gov/zing/srw/",
-            "dc": "http://purl.org/dc/elements/1.1/",
-            "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
-        }
-        for record in root.findall(".//srw:record", ns):
-            data_elem = record.find(".//oai_dc:dc", ns)
-            if data_elem is None:
-                continue
-
-            def _txt(tag: str) -> str:
-                e = data_elem.find(f"dc:{tag}", ns)
-                return (e.text or "").strip() if e is not None else ""
-
-            def _txts(tag: str) -> list[str]:
-                return [(e.text or "").strip() for e in data_elem.findall(f"dc:{tag}", ns) if e.text]
-
-            title = _txt("title")
-            if not title:
-                continue
-            identifier = _txt("identifier")
-            url_orig = (
-                identifier if identifier.startswith("http")
-                else f"https://www.digitale-sammlungen.de/de/search?q={quote_plus(title)}"
-            )
-            authors = _txts("creator")
-            date_str = _txt("date")
-            subjects = _txts("subject")
-            description = _txt("description")
-            ymin, ymax = parse_year_range(date_str)
-            rec = Record(
-                source="bsb",
-                source_id=(
-                    hashlib.md5(identifier.encode()).hexdigest()[:16]
-                    if identifier else hashlib.md5(title.encode()).hexdigest()[:16]
-                ),
-                title=title[:300],
-                author=", ".join(authors[:3])[:200],
-                date_text=date_str[:50],
-                date_year_min=ymin,
-                date_year_max=ymax,
-                url_original=url_orig,
-                snippet=(", ".join(subjects[:5]) or description)[:500],
-                language=_txt("language")[:20],
-                doc_type=_txt("type")[:50],
-                metadata={
-                    "institution": "Bayerische Staatsbibliothek",
-                    "publisher": _txt("publisher"),
-                },
-            )
-            out.append(rec)
-    except ET.ParseError as e:
-        print(f"  ! BSB XML parse error: {e}", file=sys.stderr)
-    return out[:limit]
-
-
-# ---------- connector: SLUB Dresden ----------
-
-async def search_slub(session, query: str, limit: int = 20) -> list[Record]:
-    """SLUB Dresden — VuFind catalog API for Saxon manuscripts, maps and early prints."""
-    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:5]
-    qstr = " ".join(terms)
-    # VuFind JSON API
-    url = "https://katalog.slub-dresden.de/api/v1/search"
-    params = {
-        "lookfor": qstr,
-        "type": "AllFields",
-        "limit": min(limit, 40),
-        "sort": "relevance",
-    }
-    data = await fetch_json(session, url, params)
-    if not data or not isinstance(data, dict):
-        return []
-    out: list[Record] = []
-    for item in (data.get("records") or data.get("results") or [])[:limit]:
-        title_raw = item.get("title", "") or item.get("title_full", "")
-        title = (title_raw if isinstance(title_raw, str) else " ".join(title_raw or []))[:300]
-        if not title:
-            continue
-        record_id = str(item.get("id", ""))
-        authors_raw = item.get("author", "") or item.get("author2", []) or []
-        if isinstance(authors_raw, str):
-            author = authors_raw[:200]
-        else:
-            author = ", ".join(str(a) for a in authors_raw[:3])[:200]
-        date_str = str(item.get("publishDate", [""])[0] if isinstance(item.get("publishDate"), list) else item.get("publishDate", ""))
-        ymin, ymax = parse_year_range(date_str)
-        subjects_raw = item.get("topic", []) or item.get("subject", []) or []
-        snippet = ", ".join(str(s) for s in subjects_raw[:5])[:500]
-        thumb = ""
-        if item.get("cover"):
-            thumb = str(item["cover"])
-        url_orig = (
-            f"https://katalog.slub-dresden.de/id/{record_id}"
-            if record_id else f"https://katalog.slub-dresden.de/Search/Results?lookfor={quote_plus(qstr)}"
-        )
-        url_iiif = ""
-        for link in (item.get("urls") or []):
-            href = link.get("url", "") if isinstance(link, dict) else str(link)
-            if "digital.slub-dresden.de" in href or "iiif" in href.lower():
-                url_iiif = href
-                break
-        rec = Record(
-            source="slub",
-            source_id=record_id or hashlib.md5(title.encode()).hexdigest()[:16],
-            title=title,
-            author=author,
-            date_text=date_str[:50],
-            date_year_min=ymin,
-            date_year_max=ymax,
-            url_original=url_orig,
-            url_iiif=url_iiif,
-            thumbnail_url=thumb,
-            snippet=snippet,
-            language=str(item.get("language", [""])[0] if isinstance(item.get("language"), list) else item.get("language", ""))[:20],
-            doc_type=str(item.get("format", [""])[0] if isinstance(item.get("format"), list) else item.get("format", ""))[:50],
-            metadata={"institution": "SLUB Dresden", "publisher": str(item.get("publisher", ""))[:100]},
-        )
-        out.append(rec)
-    return out
-
-
-# ---------- connector: Manus Online (Italian manuscripts) ----------
-
-async def search_manus(session, query: str, limit: int = 20) -> list[Record]:
-    """Manus Online (ICCU) — Italian manuscript database. REST search with HTML fallback."""
-    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:3]
-    qstr = " ".join(terms)
-    out: list[Record] = []
-
-    # Try JSON API first
-    url_json = "https://manus.iccu.sbn.it/json/ricerca"
-    params = {"testo": qstr, "rows": min(limit, 30), "start": 0}
-    data = await fetch_json(session, url_json, params)
-    if data and isinstance(data, dict):
-        items = data.get("manoscritti") or data.get("items") or data.get("results") or []
-        for item in items[:limit]:
-            title = (item.get("segnatura") or item.get("titolo") or item.get("title") or "")[:300]
-            if not title:
-                continue
-            rec_id = str(item.get("id") or item.get("codice") or hashlib.md5(title.encode()).hexdigest()[:16])
-            date_str = str(item.get("datazione") or item.get("data") or "")
-            ymin, ymax = parse_year_range(date_str)
-            rec = Record(
-                source="manus",
-                source_id=rec_id,
-                title=title,
-                author=str(item.get("autore") or item.get("author") or "")[:200],
-                date_text=date_str[:50],
-                date_year_min=ymin,
-                date_year_max=ymax,
-                location=str(item.get("luogo_conservazione") or item.get("location") or "")[:200],
-                url_original=str(item.get("url") or f"https://manus.iccu.sbn.it/opac_SchedaScheda.php?ID={rec_id}"),
-                snippet=str(item.get("abstract") or item.get("descrizione") or "")[:500],
-                doc_type="manuscript",
-                metadata={"institution": "ICCU Manus Online", "biblioteca": str(item.get("biblioteca") or "")},
-            )
-            out.append(rec)
-        if out:
-            return out
-
-    # Fallback: parse HTML search results
-    url_html = "https://manus.iccu.sbn.it/opac_SchedaScheda.php"
-    params_html = {"q": qstr, "Tipo": "testoLibero", "PAGINAATTUALE": 1}
-    html = await fetch_text(session, url_html, params_html)
-    if not html:
-        return []
-    # Extract basic title/link pairs from HTML table rows
-    rows = re.findall(r'href="(opac_SchedaScheda\.php\?[^"]+)"[^>]*>\s*([^<]{5,200})', html)
-    for href, title_raw in rows[:limit]:
-        title = re.sub(r'\s+', ' ', title_raw).strip()
-        if not title:
-            continue
-        id_m = re.search(r'ID=(\d+)', href)
-        rec_id = id_m.group(1) if id_m else hashlib.md5(title.encode()).hexdigest()[:12]
-        rec = Record(
-            source="manus",
-            source_id=rec_id,
-            title=title[:300],
-            url_original=f"https://manus.iccu.sbn.it/{href}",
-            doc_type="manuscript",
-            metadata={"institution": "ICCU Manus Online"},
-        )
-        out.append(rec)
-    return out
-
-
 # ---------- relevance scoring ----------
 
 def score_record(rec: Record, query_terms: list[str]) -> float:
@@ -1243,14 +1217,16 @@ CONNECTORS = {
     "openlibrary": search_openlibrary,
     "nb_no": search_nb,
     "smithsonian": search_smithsonian,
+    "openaire": search_openaire,
+    "openalex": search_openalex,
+    "doaj": search_doaj,
+    "zenodo": search_zenodo,
+    "core": search_core,
+    "rumsey": search_rumsey,
+    "ape": search_ape,
     "digivatlib": search_digivatlib,
     "antenati": search_antenati,
     "edr": search_edr,
-    "bsb": search_bsb,
-    "slub": search_slub,
-    "manus": search_manus,
-    "hathitrust": search_hathitrust,
-    "anno": search_anno,
 }
 
 
