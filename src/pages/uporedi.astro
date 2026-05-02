@@ -1,0 +1,82 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { SOURCE_LABELS, SOURCE_COUNTRIES } from '../lib/supabase';
+---
+<Layout title="Uporedi rezultate — Arhiva Ulcinj" description="Uporedi do 4 rezultata side-by-side — datum, izvor, lokacija, AI rezime, pojavljivanja.">
+  <article class="max-w-7xl mx-auto px-4 py-8">
+
+    <nav class="text-sm font-sans mb-4 text-ink/60">
+      <a href="/" class="hover:text-venetian">← Pretraga</a> · <span>Uporedjivanje</span>
+    </nav>
+
+    <header class="mb-6 pb-4 border-b-2 border-gold/40">
+      <h1 class="text-3xl font-semibold">Uporedi rezultate</h1>
+      <p class="text-ink/70 mt-2 font-sans">Klikni "⚖️ Uporedi" na rezultatu da ga dodaš u listu (max 4). Onda otvori ovu stranicu.</p>
+    </header>
+
+    <div id="empty-state" class="text-center py-16 font-sans text-ink/60">
+      <p class="mb-3">Lista za uporedjivanje je prazna.</p>
+      <a href="/" class="text-venetian underline">→ Vrati se na pretragu</a>
+    </div>
+
+    <div id="compare-grid" class="hidden gap-4" style="display: none;"></div>
+
+    <div id="actions" class="hidden mt-6 font-sans text-sm">
+      <button id="clear-btn" class="px-3 py-1 border border-gold/40 rounded-sm hover:bg-white/60">🗑 Očisti listu</button>
+    </div>
+  </article>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const items = window.arhivaCompare.get();
+      const empty = document.getElementById('empty-state');
+      const grid = document.getElementById('compare-grid');
+      const actions = document.getElementById('actions');
+      if (!items.length) { return; }
+      empty.classList.add('hidden');
+      grid.classList.remove('hidden');
+      grid.style.display = `grid`;
+      grid.style.gridTemplateColumns = `repeat(${items.length}, minmax(0, 1fr))`;
+      actions.classList.remove('hidden');
+
+      // Fetch each via API
+      const cards = await Promise.all(items.map(async ({ id, title }) => {
+        try {
+          const r = await fetch(`/api/item.json?id=${encodeURIComponent(id)}`);
+          if (!r.ok) return { id, title, error: `HTTP ${r.status}` };
+          const data = await r.json();
+          return { ...data, id, _title: title };
+        } catch (e) { return { id, title, error: e.message }; }
+      }));
+
+      grid.innerHTML = cards.map(c => {
+        if (c.error) return `<div class="border border-venetian rounded-sm p-3 bg-venetian/10 text-sm">${c._title || c.title}<br><em>Greška: ${c.error}</em></div>`;
+        const m = c.metadata?.mentions;
+        const ai = c.metadata?.ai_summary;
+        return `<div class="border border-gold/40 rounded-sm bg-white/40 dark:bg-ink/30 p-4 flex flex-col gap-2 min-w-0">
+          <div class="flex justify-between items-start gap-2">
+            <strong class="text-sm leading-tight">${(c.title || '').slice(0, 100)}</strong>
+            <button onclick="window.arhivaCompare.remove('${c.id}'); location.reload()" title="Ukloni" class="text-ink/50 hover:text-venetian flex-shrink-0">✕</button>
+          </div>
+          <div class="text-xs font-sans flex flex-wrap gap-1">
+            <span class="px-1.5 py-0.5 bg-venetian/10 text-venetian rounded">${c.source || ''}</span>
+            ${c.date_text ? `<span class="px-1.5 py-0.5 bg-ink/10 rounded">${c.date_text.slice(0, 30)}</span>` : ''}
+            ${c.location ? `<span class="px-1.5 py-0.5 bg-ottoman/10 text-ottoman rounded">📍 ${c.location}</span>` : ''}
+          </div>
+          ${c.author ? `<p class="text-xs italic text-ink/70">${c.author.slice(0, 60)}</p>` : ''}
+          ${ai ? `<div class="text-xs p-2 bg-venetian/5 border-l-2 border-venetian rounded-sm"><strong>🤖 AI:</strong> ${ai.slice(0, 220)}…</div>` : ''}
+          ${c.snippet ? `<p class="text-xs line-clamp-4">${c.snippet.slice(0, 250)}…</p>` : ''}
+          ${m ? `<div class="text-xs font-sans text-ink/60 mt-1">📍 ${m.total} pomena na ${m.by_page?.length || 0} strana</div>` : ''}
+          <a href="/item/${c.id}" class="text-xs text-venetian hover:underline mt-auto">📖 Otvori detalje →</a>
+        </div>`;
+      }).join('');
+
+      document.getElementById('clear-btn').addEventListener('click', () => {
+        if (confirm('Očisti listu uporedjivanja?')) {
+          window.arhivaCompare.clear();
+          location.reload();
+        }
+      });
+    });
+  </script>
+</Layout>

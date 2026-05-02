@@ -21,21 +21,22 @@ const { title = 'Arhiva Ulcinj', description = 'Federalna pretraga starih arhiva
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 </head>
-<body class="min-h-screen bg-parchment text-ink font-serif">
+<body class="min-h-screen bg-parchment text-ink font-serif dark:bg-ink dark:text-parchment">
   <header class="border-b-2 border-gold/40 bg-parchment/80 backdrop-blur sticky top-0 z-10">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2 hover:opacity-80">
         <span class="text-2xl">📜</span>
         <span class="text-xl font-semibold">Arhiva Ulcinj</span>
       </a>
-      <nav class="flex gap-5 text-sm font-sans">
+      <nav class="flex gap-4 text-sm font-sans items-center flex-wrap">
         <a href="/" class="hover:text-venetian">Pretraga</a>
         <a href="/zbirke" class="hover:text-venetian">Zbirke</a>
         <a href="/mapa" class="hover:text-venetian">Mapa</a>
-        <a href="/vremenska-osa" class="hover:text-venetian">Vremenska osa</a>
-        <a href="/stats" class="hover:text-venetian">Statistika</a>
-        <a href="/lokacije" class="hover:text-venetian">Lokacije</a>
-        <a href="/o-projektu" class="hover:text-venetian">O projektu</a>
+        <a href="/vremenska-osa" class="hover:text-venetian hidden md:inline">Vremenska osa</a>
+        <a href="/stats" class="hover:text-venetian hidden md:inline">Statistika</a>
+        <a href="/uporedi" class="hover:text-venetian">Uporedi</a>
+        <a href="/o-projektu" class="hover:text-venetian hidden md:inline">O projektu</a>
+        <button id="theme-toggle" type="button" class="hover:text-venetian text-base" title="Light/dark mode">🌓</button>
       </nav>
     </div>
   </header>
@@ -55,6 +56,85 @@ const { title = 'Arhiva Ulcinj', description = 'Federalna pretraga starih arhiva
 </style>
 
 <script is:inline>
+  // Theme toggle (light/dark) — stored in localStorage 'arhiva_theme'
+  (function() {
+    const KEY = 'arhiva_theme';
+    const saved = localStorage.getItem(KEY);
+    if (saved === 'dark') document.documentElement.classList.add('dark');
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('theme-toggle');
+      if (btn) btn.addEventListener('click', () => {
+        const nowDark = !document.documentElement.classList.contains('dark');
+        document.documentElement.classList.toggle('dark', nowDark);
+        localStorage.setItem(KEY, nowDark ? 'dark' : 'light');
+      });
+    });
+  })();
+
+  // Search history: track all submitted queries in localStorage
+  (function() {
+    const KEY = 'arhiva_search_history';
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q && q.trim().length > 1) {
+      try {
+        const hist = JSON.parse(localStorage.getItem(KEY) || '[]');
+        const now = new Date().toISOString();
+        // Dedupe and keep last 20
+        const filtered = hist.filter(h => h.q !== q).slice(0, 19);
+        filtered.unshift({ q, t: now });
+        localStorage.setItem(KEY, JSON.stringify(filtered));
+      } catch (e) {}
+    }
+    // On home page, render history below quick links
+    if (window.location.pathname === '/' && !q && !params.get('location') && !params.get('source')) {
+      document.addEventListener('DOMContentLoaded', () => {
+        try {
+          const hist = JSON.parse(localStorage.getItem(KEY) || '[]');
+          if (!hist.length) return;
+          const container = document.querySelector('section.border-b');
+          if (!container) return;
+          const histEl = document.createElement('div');
+          histEl.className = 'mt-4 text-xs font-sans text-ink/60';
+          histEl.innerHTML = '<span class="mr-2">🕒 Skoro pretraženo:</span>' +
+            hist.slice(0, 8).map(h => `<a href="/?q=${encodeURIComponent(h.q)}" class="mr-2 underline hover:text-venetian">${h.q.length > 30 ? h.q.slice(0, 30) + '…' : h.q}</a>`).join('');
+          const inner = container.querySelector('.max-w-4xl');
+          if (inner) inner.appendChild(histEl);
+        } catch (e) {}
+      });
+    }
+  })();
+
+  // Compare basket: track selected results in localStorage
+  (function() {
+    window.arhivaCompare = {
+      KEY: 'arhiva_compare_basket',
+      get() { try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch { return []; } },
+      add(id, title) {
+        const cur = this.get();
+        if (cur.some(x => x.id === id)) return false;
+        if (cur.length >= 4) return false;
+        cur.push({ id, title });
+        localStorage.setItem(this.KEY, JSON.stringify(cur));
+        this.updateBadge();
+        return true;
+      },
+      remove(id) {
+        const cur = this.get().filter(x => x.id !== id);
+        localStorage.setItem(this.KEY, JSON.stringify(cur));
+        this.updateBadge();
+      },
+      clear() { localStorage.removeItem(this.KEY); this.updateBadge(); },
+      updateBadge() {
+        const n = this.get().length;
+        document.querySelectorAll('a[href="/uporedi"]').forEach(a => {
+          a.textContent = n > 0 ? `Uporedi (${n})` : 'Uporedi';
+        });
+      },
+    };
+    document.addEventListener('DOMContentLoaded', () => window.arhivaCompare.updateBadge());
+  })();
+
   // Admin mode: ?admin=<token> in URL stores token in localStorage and shows hide buttons.
   // Logout: ?admin=logout
   (function() {

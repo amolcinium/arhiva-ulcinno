@@ -33,9 +33,32 @@ const detailUrl = `/item/${rec.id}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
     <a href={detailUrl} class="text-venetian hover:underline font-medium">📖 Detalji →</a>
     <button
       type="button"
+      class="compare-btn text-ink/60 hover:text-venetian"
+      data-id={rec.id}
+      data-title={rec.title.slice(0, 80)}
+      title="Dodaj u uporedjivanje (max 4)"
+    >⚖️ Uporedi</button>
+    <button
+      type="button"
       class="hide-btn hidden ml-auto text-ink/50 hover:text-venetian"
       data-id={rec.id}
       title="Sakrij ovaj rezultat (samo admin)"
     >🗑 Sakrij</button>
   </div>
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.compare-btn').forEach(btn => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const id = btn.dataset.id, title = btn.dataset.title;
+          const added = window.arhivaCompare.add(id, title);
+          btn.textContent = added ? '✓ Dodato' : (window.arhivaCompare.get().some(x => x.id === id) ? '✓ Već u listi' : '⚠ Lista puna (max 4)');
+          setTimeout(() => { btn.textContent = '⚖️ Uporedi'; }, 2000);
+        });
+      });
+    });
+  </script>
 </article>
