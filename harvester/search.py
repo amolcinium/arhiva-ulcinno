@@ -470,8 +470,13 @@ async def search_nb(session, query: str, limit: int = 15) -> list[Record]:
         nb_id = item.get("id", "")
         if not title or not nb_id:
             continue
-        creators = md.get("creators") or []
-        author = ", ".join(creators[:3]) if isinstance(creators, list) else str(creators)
+        creators_raw = md.get("creators") or []
+        if not isinstance(creators_raw, list):
+            creators_raw = [creators_raw] if creators_raw else []
+        author = ", ".join(
+            c if isinstance(c, str) else (c.get("name") or c.get("label") or str(c))
+            for c in creators_raw[:3]
+        )
         ymin = None
         date_str = ""
         for d in [md.get("originiso", ""), md.get("startdate", ""), md.get("originalAvailableDate", "")]:
@@ -494,9 +499,9 @@ async def search_nb(session, query: str, limit: int = 15) -> list[Record]:
             date_year_max=ymin,
             url_original=item.get("_links", {}).get("presentation", {}).get("href", f"https://www.nb.no/items/{nb_id}"),
             thumbnail_url=thumb,
-            snippet=(md.get("subjects") and ", ".join(
+            snippet=(", ".join(
                 s if isinstance(s, str) else (s.get("label") or s.get("name") or str(s))
-                for s in md["subjects"][:5]
+                for s in (md["subjects"][:5] if isinstance(md.get("subjects"), list) else [])
             ) or "")[:500],
             doc_type=md.get("mediaType", "")[:50],
             language=", ".join(md.get("languages", [])[:2])[:30],
