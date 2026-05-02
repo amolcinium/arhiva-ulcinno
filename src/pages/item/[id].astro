@@ -90,6 +90,95 @@ const citeChicago = toChicago(item);
           </section>
         )}
 
+        {(item.metadata as any)?.mentions && (
+          <section class="border border-gold/40 rounded-sm bg-white/40 p-5">
+            <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-3">📍 Pojavljivanja u dokumentu</h2>
+            {(() => {
+              const m = (item.metadata as any).mentions;
+              const sourceId = item.source_id;
+              const isIA = item.source === 'internet_archive' && sourceId;
+              const topicLabels: Record<string, string> = {
+                trade: '🪙 Trgovina',
+                military: '⚔️ Vojska',
+                religious: '⛪ Religija',
+                cartographic: '🗺 Kartografija',
+                civil: '⚖️ Civilno',
+                diplomatic: '🤝 Diplomatija',
+                demographic: '👥 Stanovništvo',
+              };
+              return (
+                <>
+                  <div class="text-base mb-3">
+                    Ulcinj se pominje <strong class="text-venetian">{m.total} puta</strong> na <strong>{m.by_page?.length ?? 0}</strong> {m.by_page?.length === 1 ? 'strani' : 'strana'}.
+                  </div>
+
+                  {m.by_term && Object.keys(m.by_term).length > 0 && (
+                    <div class="mb-4 flex flex-wrap gap-2 text-xs font-sans">
+                      <span class="text-ink/60">Po varijanti imena:</span>
+                      {Object.entries(m.by_term).map(([term, count]) => (
+                        <span class="px-2 py-0.5 bg-gold/20 rounded">
+                          <strong>{term}</strong>: {count as number}×
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {m.topics_summary && Object.keys(m.topics_summary).length > 0 && (
+                    <div class="mb-4 flex flex-wrap gap-2 text-xs font-sans">
+                      <span class="text-ink/60">Teme:</span>
+                      {Object.entries(m.topics_summary).map(([topic, n]) => (
+                        <span class="px-2 py-0.5 bg-ottoman/15 text-ottoman rounded">
+                          {topicLabels[topic] ?? topic} ({n as number})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {m.by_page && m.by_page.length > 0 && (
+                    <details class="font-sans text-sm" open={m.by_page.length <= 5}>
+                      <summary class="cursor-pointer hover:text-venetian mb-2">
+                        Detalji po strani ({m.by_page.length}) ▾
+                      </summary>
+                      <ul class="space-y-3 mt-2">
+                        {m.by_page.map((p: any) => (
+                          <li class="border-l-2 border-gold/40 pl-3">
+                            <div class="flex items-center gap-3 mb-1">
+                              <strong>
+                                {isIA ? (
+                                  <a href={`https://archive.org/details/${sourceId}/page/n${p.page}`}
+                                     target="_blank" rel="noopener"
+                                     class="text-venetian hover:underline">
+                                    Strana {p.page} ↗
+                                  </a>
+                                ) : (
+                                  <>Strana {p.page}</>
+                                )}
+                              </strong>
+                              <span class="text-xs text-ink/60">{p.count}× pomen</span>
+                              {p.topics && p.topics.length > 0 && (
+                                <span class="flex gap-1">
+                                  {p.topics.map((t: string) => (
+                                    <span class="text-xs px-1.5 py-0.5 bg-ottoman/10 text-ottoman rounded">
+                                      {topicLabels[t] ?? t}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
+                            </div>
+                            {p.extracts && p.extracts.map((ex: string) => (
+                              <p class="text-sm text-ink/80 leading-relaxed mt-1" set:html={highlight(ex, queryTerms)}></p>
+                            ))}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </>
+              );
+            })()}
+          </section>
+        )}
+
         {item.full_text && (
           <section id="transcript" data-item-id={item.id}>
             <div class="flex items-center justify-between mb-3">

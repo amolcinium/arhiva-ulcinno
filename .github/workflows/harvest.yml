@@ -79,6 +79,14 @@ jobs:
           python3 extract_fulltext.py 2>&1 | tee fulltext.log
         continue-on-error: true
 
+      - name: Mention analyzer — count, page, topic per record with full_text
+        working-directory: harvester
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 mention_analyzer.py 2>&1 | tee mentions.log
+        continue-on-error: true
+
       - name: Audit relevance — auto-delete records without Ulcinj anchor
         working-directory: harvester
         env:
@@ -102,5 +110,6 @@ jobs:
             harvester/harvest.log
             harvester/enrich.log
             harvester/fulltext.log
+            harvester/mentions.log
             harvester/audit.log
           retention-days: 30
