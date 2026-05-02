@@ -43,6 +43,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   digivatlib: 'DigiVatLib (Vatikan)',
   antenati: 'Antenati (Italija)',
   edr: 'EDR (Roma)',
+  bsb: 'Bayerische Staatsbibliothek (München)',
+  slub: 'SLUB Dresden',
+  manus: 'Manus Online (ICCU, talijanski rukopisi)',
 };
 
 export const LOCATIONS = [
