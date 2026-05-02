@@ -50,6 +50,33 @@ export const SOURCE_LABELS: Record<string, string> = {
   anno: 'ÖNB ANNO (austrijske novine)',
 };
 
+/**
+ * Country/institution origin per source. Shown on result cards as flag + label.
+ * Helps user quickly spot which national archive a record comes from.
+ */
+export const SOURCE_COUNTRIES: Record<string, { flag: string; country: string }> = {
+  europeana:        { flag: '🇪🇺', country: 'EU agregator' },
+  internet_archive: { flag: '🇺🇸', country: 'SAD' },
+  edh:              { flag: '🇩🇪', country: 'Njemačka (Heidelberg)' },
+  pelagios:         { flag: '🌍', country: 'Internacionalni' },
+  wikidata:         { flag: '🌍', country: 'Internacionalni' },
+  gallica:          { flag: '🇫🇷', country: 'Francuska' },
+  loc:              { flag: '🇺🇸', country: 'SAD (Library of Congress)' },
+  wellcome:         { flag: '🇬🇧', country: 'Velika Britanija' },
+  crossref:         { flag: '🌍', country: 'Internacionalni (akademski)' },
+  openlibrary:      { flag: '🇺🇸', country: 'SAD' },
+  nb_no:            { flag: '🇳🇴', country: 'Norveška' },
+  smithsonian:      { flag: '🇺🇸', country: 'SAD (Smithsonian)' },
+  digivatlib:       { flag: '🇻🇦', country: 'Vatikan' },
+  antenati:         { flag: '🇮🇹', country: 'Italija' },
+  edr:              { flag: '🇮🇹', country: 'Italija (Roma)' },
+  bsb:              { flag: '🇩🇪', country: 'Njemačka (München)' },
+  slub:             { flag: '🇩🇪', country: 'Njemačka (Dresden)' },
+  manus:            { flag: '🇮🇹', country: 'Italija (ICCU rukopisi)' },
+  hathitrust:       { flag: '🇺🇸', country: 'SAD (akademska)' },
+  anno:             { flag: '🇦🇹', country: 'Austrija (novine)' },
+};
+
 export const LOCATIONS = [
   { key: 'ulcinj',                 label: 'Ulcinj / Olcinium / Dulcigno' },
   { key: 'stari_grad_ulcinj',      label: 'Kalaja (Stari grad)' },

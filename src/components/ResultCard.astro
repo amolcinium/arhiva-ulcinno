@@ -1,8 +1,9 @@
 ---
-import { SOURCE_LABELS, type ArchiveResult } from '../lib/supabase';
+import { SOURCE_LABELS, SOURCE_COUNTRIES, type ArchiveResult } from '../lib/supabase';
 interface Props { rec: ArchiveResult; q?: string }
 const { rec, q = '' } = Astro.props;
 const sourceLabel = SOURCE_LABELS[rec.source] ?? rec.source;
+const country = SOURCE_COUNTRIES[rec.source];
 const dateLabel = rec.date_text ?? (rec.date_year_min ? `${rec.date_year_min}${rec.date_year_max && rec.date_year_max !== rec.date_year_min ? `–${rec.date_year_max}` : ''}` : null);
 const detailUrl = `/item/${rec.id}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
 ---
@@ -19,6 +20,7 @@ const detailUrl = `/item/${rec.id}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
   </div>
   <div class="flex flex-wrap gap-2 text-xs font-sans">
     <span class="px-2 py-0.5 bg-venetian/10 text-venetian rounded">{sourceLabel}</span>
+    {country && <span class="px-2 py-0.5 bg-ink/5 text-ink/70 rounded" title={country.country}>{country.flag} {country.country}</span>}
     {dateLabel && <span class="px-2 py-0.5 bg-ink/10 rounded">{dateLabel}</span>}
     {rec.location && <span class="px-2 py-0.5 bg-ottoman/10 text-ottoman rounded">📍 {rec.location}</span>}
     {rec.doc_type && <span class="px-2 py-0.5 bg-gold/20 rounded">{rec.doc_type}</span>}

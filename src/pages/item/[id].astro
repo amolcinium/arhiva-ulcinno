@@ -1,6 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getItem, getRelated, SOURCE_LABELS, LOCATIONS } from '../../lib/supabase';
+import { getItem, getRelated, SOURCE_LABELS, SOURCE_COUNTRIES, LOCATIONS } from '../../lib/supabase';
 import { toBibtex, toApa, toChicago } from '../../lib/citation';
 
 const { id } = Astro.params;
@@ -61,6 +61,11 @@ const citeChicago = toChicago(item);
     <header class="mb-6 pb-6 border-b-2 border-gold/40">
       <div class="flex flex-wrap gap-2 mb-3 text-xs font-sans">
         <span class="px-2 py-0.5 bg-venetian/10 text-venetian rounded font-medium">{sourceLabel}</span>
+        {SOURCE_COUNTRIES[item.source] && (
+          <span class="px-2 py-0.5 bg-ink/5 text-ink/70 rounded" title={SOURCE_COUNTRIES[item.source].country}>
+            {SOURCE_COUNTRIES[item.source].flag} {SOURCE_COUNTRIES[item.source].country}
+          </span>
+        )}
         {dateLabel && <span class="px-2 py-0.5 bg-ink/10 rounded">{dateLabel}</span>}
         {locationLabel && <span class="px-2 py-0.5 bg-ottoman/10 text-ottoman rounded">📍 {locationLabel}</span>}
         {item.doc_type && <span class="px-2 py-0.5 bg-gold/20 rounded">{item.doc_type}</span>}
