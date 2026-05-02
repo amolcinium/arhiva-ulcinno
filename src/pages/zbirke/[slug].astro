@@ -75,9 +75,14 @@ for (const r of results ?? []) {
           </span>
         ))}
       </p>
-      <a href={`/api/export.csv?collection=${col.slug}`} class="text-sm font-sans text-venetian hover:underline">
-        ⬇ Export CSV
-      </a>
+      <div class="flex gap-4">
+        <a href={`/api/export.csv?collection=${col.slug}`} class="text-sm font-sans text-venetian hover:underline">
+          ⬇ Export CSV
+        </a>
+        <a href={`/api/export.json?collection=${col.slug}`} class="text-sm font-sans text-venetian hover:underline">
+          ⬇ Export JSON
+        </a>
+      </div>
     </div>
 
     {results && results.length > 0 ? (
