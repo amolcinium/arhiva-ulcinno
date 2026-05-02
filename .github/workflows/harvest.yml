@@ -59,7 +59,9 @@ jobs:
             --source europeana --source internet_archive --source edh \
             --source pelagios --source wikidata --source gallica \
             --source loc --source wellcome --source crossref --source openlibrary \
-            --source bsb --source slub --source manus --source hathitrust --source anno 2>&1 | tee harvest.log
+            --source bsb --source slub --source manus --source hathitrust --source anno \
+            --source openaire --source openalex --source doaj --source zenodo \
+            --source core --source rumsey --source ape 2>&1 | tee harvest.log
 
       - name: Enrich empty snippets
         working-directory: harvester
