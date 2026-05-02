@@ -59,6 +59,20 @@ jobs:
           python3 extract_fulltext.py 2>&1 | tee fulltext.log
         continue-on-error: true
 
+      - name: Audit relevance — auto-delete records without Ulcinj anchor
+        working-directory: harvester
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 audit_relevance.py --apply 2>&1 | tee audit.log
+          # Hard-delete what audit flagged this run
+          curl -s -X DELETE "https://frsgzfzvdxswqjpdmcsd.supabase.co/rest/v1/archive_results?metadata->>hidden_reason=eq.relevance_audit" \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
+            -H "Prefer: count=exact" \
+            -i 2>&1 | grep -E 'HTTP|content-range' | tee -a audit.log
+        continue-on-error: true
+
       - name: Upload all logs as artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,4 +82,5 @@ jobs:
             harvester/harvest.log
             harvester/enrich.log
             harvester/fulltext.log
+            harvester/audit.log
           retention-days: 30
