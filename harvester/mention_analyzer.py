@@ -148,12 +148,42 @@ def analyze_text(full_text: str) -> dict:
         })
 
     total = sum(by_term.values())
+
+    # Build sparkline: distribution of mentions across pages (10 buckets)
+    n_pages_total = len(pages) or 1
+    sparkline = [0] * 10
+    for p in by_page:
+        bucket = min(9, int(((p["page"] - 1) / n_pages_total) * 10))
+        sparkline[bucket] += p["count"]
+
+    # Word cloud: top context words around mentions (Latin/Romance/Slavic stopwords removed)
+    STOPWORDS = {
+        "the","of","and","in","to","a","for","is","on","that","by","with","as","at","from","this",
+        "et","de","la","le","les","du","des","una","uno","una","del","della","della","alla",
+        "u","i","na","sa","je","se","za","da","ne","na","po","ali","ne","što","kada","koji",
+        "the","a","an","ad","ex","sub","cum","post","ante","apud","in","ab","de","per","prae","pro",
+        "olcinium","dulcigno","ulcinj","ulqin","bei","aus","est","sunt","sed","et","aut","quod","qui",
+        "non","hoc","sic","si","tu","tu","is","id","also","may","one","two","three","four",
+    }
+    word_freq: Counter = Counter()
+    for p in by_page:
+        for ex in p.get("extracts", []):
+            words = re.findall(r"\b[a-zA-ZÀ-ÿčćžšđČĆŽŠĐ]{4,}\b", ex.lower())
+            for w in words:
+                if w in STOPWORDS or w.lower() in [t.lower() for t in ANCHOR_TERMS]:
+                    continue
+                word_freq[w] += 1
+    top_words = word_freq.most_common(20)
+
     return {
         "total": total,
         "by_term": dict(by_term),
         "by_page": by_page,
         "topics_summary": dict(topics_summary),
-        "analyzed_at": "2026-05-02T09:30:00Z",
+        "sparkline": sparkline,
+        "n_pages_total": n_pages_total,
+        "top_words": top_words,
+        "analyzed_at": "2026-05-02T12:00:00Z",
     }
 
 

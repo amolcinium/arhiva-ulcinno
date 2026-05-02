@@ -100,6 +100,13 @@ const TOPIC_LABELS: Record<string, string> = {
           </section>
         )}
 
+        {(item.metadata as any)?.ai_summary && (
+          <section class="border-l-4 border-venetian bg-venetian/5 p-5 rounded-sm">
+            <h2 class="font-sans text-sm uppercase tracking-wider text-venetian mb-2">🤖 AI rezime — zašto je relevantno</h2>
+            <p class="text-base leading-relaxed italic">{(item.metadata as any).ai_summary}</p>
+          </section>
+        )}
+
         {(item.metadata as any)?.mentions && (
           <section class="border border-gold/40 rounded-sm bg-white/40 p-5">
             <h2 class="font-sans text-sm uppercase tracking-wider text-ink/60 mb-3">📍 Pojavljivanja u dokumentu</h2>
@@ -135,6 +142,39 @@ const TOPIC_LABELS: Record<string, string> = {
                       ))}
                     </div>
                   )}
+
+                  {m.sparkline && m.n_pages_total > 0 && (() => {
+                    const sl = m.sparkline;
+                    const slMax = Math.max.apply(null, sl.concat([1]));
+                    return (
+                      <div class="mb-4">
+                        <div class="text-xs font-sans text-ink/60 mb-1">Distribucija po dokumentu (od početka do kraja, {m.n_pages_total} strana):</div>
+                        <div class="flex items-end gap-px h-12 bg-white/40 border border-gold/40 rounded-sm p-1" title="Klaster pominjanja po dijelu dokumenta">
+                          {sl.map((v: number) => {
+                            const h = Math.max(4, Math.round((v / slMax) * 100));
+                            return <div class="flex-1 bg-venetian/70 rounded-sm" style={`height:${h}%`} title={`${v} pominjanja`} />;
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {m.top_words && m.top_words.length > 0 && (() => {
+                    const tw = m.top_words.slice(0, 15);
+                    const twMax = m.top_words[0][1];
+                    return (
+                      <div class="mb-4">
+                        <div class="text-xs font-sans text-ink/60 mb-1">Najčešće riječi oko pominjanja (kontekst):</div>
+                        <div class="flex flex-wrap gap-2 font-sans">
+                          {tw.map((wn: any) => {
+                            const w = wn[0]; const n = wn[1];
+                            const size = 0.75 + (n / twMax) * 0.5;
+                            return <span class="inline-block px-2 py-0.5 bg-gold/15 rounded" style={`font-size:${size}rem`}>{w} <span class="text-ink/50 text-xs">({n})</span></span>;
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {m.by_page && m.by_page.length > 0 && (
                     <details class="font-sans text-sm" open={m.by_page.length <= 5}>

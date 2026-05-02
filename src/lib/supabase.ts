@@ -223,6 +223,7 @@ export async function searchResults(opts: {
   yearMax?: number;
   language?: string;
   hasIiif?: boolean;
+  topic?: string;
   limit?: number;
   offset?: number;
 }) {
@@ -243,6 +244,8 @@ export async function searchResults(opts: {
   if (yearMax !== undefined) query = query.lte('date_year_max', yearMax);
   if (language) query = query.ilike('language', `%${language}%`);
   if (hasIiif) query = query.not('url_iiif', 'is', null);
+  // Filter records where mentions has the requested topic (e.g., 'trade', 'military')
+  if (opts.topic) query = (query as any).filter('metadata->mentions->topics_summary', 'cs', `{"${opts.topic}":1}`);
   query = query.order('date_year_min', { ascending: true, nullsFirst: false }).range(offset, offset + limit - 1);
   const { data, count, error } = await query;
   if (error) throw error;

@@ -13,6 +13,7 @@ const yearMin = yearMinParam ? parseInt(yearMinParam, 10) : undefined;
 const yearMax = yearMaxParam ? parseInt(yearMaxParam, 10) : undefined;
 const language = url.searchParams.get('language') ?? '';
 const hasIiif = url.searchParams.get('hasIiif') === '1';
+const topic = url.searchParams.get('topic') ?? '';
 const page = parseInt(url.searchParams.get('p') ?? '1', 10);
 const limit = 30;
 const offset = (page - 1) * limit;
@@ -31,9 +32,9 @@ let results: any[] = [];
 let total = 0;
 let error: string | null = null;
 
-if (q || location || source || yearMin !== undefined || yearMax !== undefined || language || hasIiif) {
+if (q || location || source || yearMin !== undefined || yearMax !== undefined || language || hasIiif || topic) {
   try {
-    const r = await searchResults({ q, location, source, yearMin, yearMax, language: language || undefined, hasIiif: hasIiif || undefined, limit, offset });
+    const r = await searchResults({ q, location, source, yearMin, yearMax, language: language || undefined, hasIiif: hasIiif || undefined, topic: topic || undefined, limit, offset });
     results = r.results;
     total = r.total;
   } catch (e: any) {
