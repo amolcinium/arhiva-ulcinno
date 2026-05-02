@@ -73,25 +73,45 @@ export interface MapPoint {
   longitude: number;
   latitude: number;
   date_text: string | null;
+  date_year_min: number | null;
+}
+
+function parseWktPoint(wkt: string): [number, number] | null {
+  const m = wkt.match(/Point\s*\(\s*([+-]?\d+\.?\d*)\s+([+-]?\d+\.?\d*)\s*\)/i);
+  if (!m) return null;
+  const lng = parseFloat(m[1]);
+  const lat = parseFloat(m[2]);
+  if (isNaN(lng) || isNaN(lat)) return null;
+  return [lng, lat];
 }
 
 export async function getMapPoints(): Promise<MapPoint[]> {
-  // Pull all archive_results with EDH coordinates from metadata
+  // Fetch EDH (lat/lng in metadata), Wikidata (coord_wkt in metadata), and Pelagios
   const { data, error } = await supabase
     .from('archive_results')
-    .select('id, source, title, location, url_original, date_text, metadata')
-    .eq('source', 'edh')
-    .not('metadata->longitude', 'is', null)
-    .limit(500);
+    .select('id, source, title, location, url_original, date_text, date_year_min, metadata')
+    .in('source', ['edh', 'wikidata', 'pelagios'])
+    .limit(1000);
   if (error) {
     console.error('getMapPoints error', error);
     return [];
   }
   return (data ?? [])
-    .map((r: any) => {
-      const lng = r.metadata?.longitude;
-      const lat = r.metadata?.latitude;
-      if (typeof lng !== 'number' || typeof lat !== 'number') return null;
+    .map((r: any): MapPoint | null => {
+      let lng: number | null = null;
+      let lat: number | null = null;
+      if (r.source === 'edh') {
+        lng = typeof r.metadata?.longitude === 'number' ? r.metadata.longitude : null;
+        lat = typeof r.metadata?.latitude === 'number' ? r.metadata.latitude : null;
+      } else if (r.source === 'wikidata') {
+        const wkt = r.metadata?.coord_wkt;
+        if (wkt) {
+          const coords = parseWktPoint(wkt);
+          if (coords) { lng = coords[0]; lat = coords[1]; }
+        }
+      }
+      // Pelagios records don't currently store coordinates — skip
+      if (lng === null || lat === null) return null;
       return {
         id: r.id,
         source: r.source,
@@ -101,7 +121,8 @@ export async function getMapPoints(): Promise<MapPoint[]> {
         longitude: lng,
         latitude: lat,
         date_text: r.date_text,
-      } as MapPoint;
+        date_year_min: r.date_year_min ?? null,
+      };
     })
     .filter((x): x is MapPoint => x !== null);
 }

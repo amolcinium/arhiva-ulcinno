@@ -4,96 +4,201 @@ import { getMapPoints } from '../lib/supabase';
 
 const points = await getMapPoints();
 const pointsJson = JSON.stringify(points);
+const totalPoints = points.length;
 ---
-<Layout title="Mapa — Arhiva Ulcinj" description="Antičke lokacije u Ulcinj-Skadar regionu sa rimskim natpisima iz EDH baze.">
+<Layout title="Mapa — Arhiva Ulcinj" description="Antičke lokacije u Ulcinj-Skadar regionu — rimski natpisi (EDH), Wikidata mjesta i drugi izvori.">
   <section class="max-w-6xl mx-auto px-4 py-8">
     <h1 class="text-3xl font-semibold mb-2">Mapa antičkih lokacija</h1>
-    <p class="text-ink/70 mb-6 font-sans">
-      {points.length} find-spotova rimskih natpisa u jadranskom regionu (izvor: Epigraphic Database Heidelberg).
-      Klikni marker za detalje i link na sve natpise sa te lokacije.
+
+    <!-- Count display -->
+    <p class="text-ink/70 mb-4 font-sans text-sm">
+      Prikazano <strong id="cnt-visible">0</strong> od <strong>{totalPoints}</strong> find-spotova
     </p>
+
+    <!-- Source filter pills -->
+    <div class="flex gap-2 mb-4 flex-wrap font-sans" id="source-pills">
+      <button data-src="all"       class="pill-btn" aria-pressed="true">Sve</button>
+      <button data-src="edh"       class="pill-btn">EDH</button>
+      <button data-src="wikidata"  class="pill-btn">Wikidata</button>
+      <button data-src="pelagios"  class="pill-btn">Pelagios</button>
+    </div>
+
+    <!-- Period slider -->
+    <div class="flex flex-wrap items-center gap-3 mb-4 font-sans text-sm">
+      <label class="text-ink/70 shrink-0">Perioda (god.):</label>
+      <span id="lbl-year-min" class="w-12 text-right font-mono text-xs">-300</span>
+      <input type="range" id="slider-min" min="-300" max="2000" value="-300"
+             class="flex-1 min-w-[80px] accent-crimson" />
+      <span class="text-ink/50">–</span>
+      <input type="range" id="slider-max" min="-300" max="2000" value="2000"
+             class="flex-1 min-w-[80px] accent-crimson" />
+      <span id="lbl-year-max" class="w-12 font-mono text-xs">2000</span>
+    </div>
 
     <div id="map" class="w-full h-[600px] border-2 border-gold/40 rounded-sm bg-white/40"></div>
 
     <div class="mt-6 grid md:grid-cols-3 gap-4 text-sm font-sans">
       <div class="p-4 border border-gold/40 rounded-sm bg-white/40">
-        <strong class="block mb-1">Centar Ulcinj-region</strong>
-        <p class="text-ink/70">Lat 41.5–42.5, Lng 19.0–20.0 — Lissus, Olcinium, Scodra, Doclea, Acruvium, Buthoe</p>
+        <strong class="block mb-1">Legenda boja</strong>
+        <p class="text-ink/70">
+          <span style="color:#8b1f1f">●</span> EDH (rimski natpisi) &nbsp;
+          <span style="color:#1a5c8a">●</span> Wikidata
+        </p>
       </div>
       <div class="p-4 border border-gold/40 rounded-sm bg-white/40">
         <strong class="block mb-1">Šta je find-spot</strong>
-        <p class="text-ink/70">Lokacija gdje je natpis pronađen. Jedan grad može imati više find-spotova.</p>
+        <p class="text-ink/70">Lokacija gdje je predmet pronađen. Grupisanje markera prikazuje gustoću nalaza.</p>
       </div>
       <div class="p-4 border border-gold/40 rounded-sm bg-white/40">
-        <strong class="block mb-1">Pretraga po lokaciji</strong>
-        <p class="text-ink/70">Klikni na marker → "Vidi sve natpise" → otvara EDH stranicu sa svim natpisima.</p>
+        <strong class="block mb-1">Filtriranje</strong>
+        <p class="text-ink/70">Period slider filtrira po minimalnoj godini zapisa. Zapisi bez datuma uvijek su vidljivi.</p>
       </div>
     </div>
   </section>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script is:inline define:vars={{ pointsJson }}>
-    const points = JSON.parse(pointsJson);
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
-    function loadLeaflet() {
+  <style>
+    .pill-btn {
+      padding: 4px 14px;
+      border: 1px solid #b8945c;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      background: transparent;
+      color: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+    .pill-btn[aria-pressed="true"] {
+      background: #8b1f1f;
+      color: #f5f0e8;
+      border-color: #8b1f1f;
+    }
+  </style>
+
+  <script is:inline define:vars={{ pointsJson }}>
+    const ALL_POINTS = JSON.parse(pointsJson);
+
+    let activeSource = 'all';
+    let yearMin = -300;
+    let yearMax = 2000;
+    let clusterGroup = null;
+
+    const SOURCE_COLORS = { edh: '#8b1f1f', wikidata: '#1a5c8a', pelagios: '#2a7a1f' };
+
+    function loadScript(src) {
       return new Promise((resolve, reject) => {
-        if (window.L) return resolve(window.L);
+        if (document.querySelector(`script[src="${src}"]`) && window.L) return resolve();
         const s = document.createElement('script');
-        s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        s.onload = () => resolve(window.L);
+        s.src = src;
+        s.onload = resolve;
         s.onerror = reject;
         document.head.appendChild(s);
       });
     }
 
-    loadLeaflet().then((L) => {
-      const map = L.map('map').setView([42.0, 19.4], 9);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        attribution: '© OpenStreetMap',
-      }).addTo(map);
+    function getFiltered() {
+      return ALL_POINTS.filter(p => {
+        if (activeSource !== 'all' && p.source !== activeSource) return false;
+        if (p.date_year_min !== null && p.date_year_min < yearMin) return false;
+        if (p.date_year_min !== null && p.date_year_min > yearMax) return false;
+        return true;
+      });
+    }
 
+    function renderMarkers() {
+      clusterGroup.clearLayers();
+      const filtered = getFiltered();
+
+      // Group overlapping points by rounded coords
       const grouped = {};
-      for (const p of points) {
-        const key = p.location || 'unknown';
+      for (const p of filtered) {
+        const key = p.latitude.toFixed(3) + ',' + p.longitude.toFixed(3);
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push(p);
       }
 
-      for (const [loc, items] of Object.entries(grouped)) {
+      for (const items of Object.values(grouped)) {
         const first = items[0];
+        const color = SOURCE_COLORS[first.source] || '#555';
         const marker = L.circleMarker([first.latitude, first.longitude], {
           radius: 6 + Math.min(items.length, 10),
-          fillColor: '#8b1f1f',
+          fillColor: color,
           color: '#b8945c',
           weight: 1.5,
           opacity: 1,
-          fillOpacity: 0.7,
+          fillOpacity: 0.75,
+        });
+        const rows = items.slice(0, 5).map(p =>
+          `<a href="${p.url_original}" target="_blank" rel="noopener"
+             style="display:block;padding:4px 0;border-bottom:1px solid #eee;color:#8b1f1f;text-decoration:none;font-size:13px;">
+             → ${p.title}</a>`
+        ).join('');
+        const more = items.length > 5 ? `<p style="font-size:11px;color:#999;padding-top:4px;">...+ ${items.length - 5} više</p>` : '';
+        marker.bindPopup(
+          `<div style="font-family:'EB Garamond',serif;max-width:280px;">
+            <strong style="font-size:16px;">${first.location || first.title}</strong>
+            <p style="font-size:11px;color:#888;margin:2px 0;">${first.source.toUpperCase()}</p>
+            <p style="font-size:12px;color:#666;margin:4px 0;">${items.length} stavk${items.length !== 1 ? 'i' : 'a'}</p>
+            <div style="max-height:200px;overflow-y:auto;">${rows}${more}</div>
+          </div>`
+        );
+        clusterGroup.addLayer(marker);
+      }
+
+      document.getElementById('cnt-visible').textContent = filtered.length;
+    }
+
+    loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js')
+      .then(() => loadScript('https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'))
+      .then(() => {
+        const map = L.map('map').setView([42.0, 19.4], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          attribution: '© OpenStreetMap',
         }).addTo(map);
 
-        const popupContent = `
-          <div style="font-family: 'EB Garamond', serif; max-width: 280px;">
-            <strong style="font-size: 16px;">${loc}</strong>
-            <p style="font-size: 12px; color: #666; margin: 4px 0;">${items.length} find-spot${items.length !== 1 ? 'ova' : ''}</p>
-            <div style="max-height: 200px; overflow-y: auto;">
-              ${items.slice(0, 5).map(p => `
-                <a href="${p.url_original}" target="_blank" rel="noopener"
-                   style="display: block; padding: 4px 0; border-bottom: 1px solid #eee; color: #8b1f1f; text-decoration: none; font-size: 13px;">
-                  → ${p.title}
-                </a>
-              `).join('')}
-              ${items.length > 5 ? `<p style="font-size: 11px; color: #999; padding-top: 4px;">...+ ${items.length - 5} više</p>` : ''}
-            </div>
-          </div>
-        `;
-        marker.bindPopup(popupContent);
-      }
+        clusterGroup = L.markerClusterGroup({ chunkedLoading: true });
+        map.addLayer(clusterGroup);
+        renderMarkers();
 
-      // Fit bounds to all markers
-      if (points.length > 0) {
-        const group = L.featureGroup(points.map(p => L.marker([p.latitude, p.longitude])));
-        map.fitBounds(group.getBounds().pad(0.1));
-      }
-    });
+        // Source pill interaction
+        document.querySelectorAll('.pill-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.pill-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
+            btn.setAttribute('aria-pressed', 'true');
+            activeSource = btn.dataset.src;
+            renderMarkers();
+          });
+        });
+
+        // Period sliders
+        const sliderMinEl = document.getElementById('slider-min');
+        const sliderMaxEl = document.getElementById('slider-max');
+        const lblMin = document.getElementById('lbl-year-min');
+        const lblMax = document.getElementById('lbl-year-max');
+
+        function syncSliders() {
+          if (yearMin > yearMax) {
+            const tmp = yearMin; yearMin = yearMax; yearMax = tmp;
+          }
+          sliderMinEl.value = yearMin;
+          sliderMaxEl.value = yearMax;
+          lblMin.textContent = yearMin < 0 ? yearMin + ' pr.n.e.' : yearMin;
+          lblMax.textContent = yearMax >= 2000 ? '≤2000' : yearMax;
+          renderMarkers();
+        }
+
+        sliderMinEl.addEventListener('input', () => {
+          yearMin = parseInt(sliderMinEl.value);
+          syncSliders();
+        });
+        sliderMaxEl.addEventListener('input', () => {
+          yearMax = parseInt(sliderMaxEl.value);
+          syncSliders();
+        });
+      });
   </script>
 </Layout>
