@@ -170,18 +170,22 @@ export async function searchResults(opts: {
   source?: string;
   yearMin?: number;
   yearMax?: number;
+  language?: string;
+  hasIiif?: boolean;
   limit?: number;
   offset?: number;
 }) {
-  const { q, location, source, yearMin, yearMax, limit = 30, offset = 0 } = opts;
+  const { q, location, source, yearMin, yearMax, language, hasIiif, limit = 30, offset = 0 } = opts;
   let query = supabase.from('archive_results_public').select('*', { count: 'exact' });
   if (q) {
     query = query.or(`title.ilike.%${q}%,snippet.ilike.%${q}%,author.ilike.%${q}%`);
   }
   if (location) query = query.contains('tags', [location]);
   if (source) query = query.eq('source', source);
-  if (yearMin) query = query.gte('date_year_min', yearMin);
-  if (yearMax) query = query.lte('date_year_max', yearMax);
+  if (yearMin !== undefined) query = query.gte('date_year_min', yearMin);
+  if (yearMax !== undefined) query = query.lte('date_year_max', yearMax);
+  if (language) query = query.ilike('language', `%${language}%`);
+  if (hasIiif) query = query.not('url_iiif', 'is', null);
   query = query.order('date_year_min', { ascending: true, nullsFirst: false }).range(offset, offset + limit - 1);
   const { data, count, error } = await query;
   if (error) throw error;

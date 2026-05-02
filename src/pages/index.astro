@@ -11,17 +11,29 @@ const yearMinParam = url.searchParams.get('yearMin');
 const yearMaxParam = url.searchParams.get('yearMax');
 const yearMin = yearMinParam ? parseInt(yearMinParam, 10) : undefined;
 const yearMax = yearMaxParam ? parseInt(yearMaxParam, 10) : undefined;
+const language = url.searchParams.get('language') ?? '';
+const hasIiif = url.searchParams.get('hasIiif') === '1';
 const page = parseInt(url.searchParams.get('p') ?? '1', 10);
 const limit = 30;
 const offset = (page - 1) * limit;
+
+const COMMON_LANGUAGES = [
+  { value: 'lat', label: 'Latinski' },
+  { value: 'it', label: 'Talijanski' },
+  { value: 'de', label: 'Njemački' },
+  { value: 'fr', label: 'Francuski' },
+  { value: 'en', label: 'Engleski' },
+  { value: 'srp', label: 'Srpski / Crnogorski' },
+  { value: 'sq', label: 'Albanski' },
+];
 
 let results: any[] = [];
 let total = 0;
 let error: string | null = null;
 
-if (q || location || source || yearMin !== undefined || yearMax !== undefined) {
+if (q || location || source || yearMin !== undefined || yearMax !== undefined || language || hasIiif) {
   try {
-    const r = await searchResults({ q, location, source, yearMin, yearMax, limit, offset });
+    const r = await searchResults({ q, location, source, yearMin, yearMax, language: language || undefined, hasIiif: hasIiif || undefined, limit, offset });
     results = r.results;
     total = r.total;
   } catch (e: any) {
@@ -62,7 +74,7 @@ const totalPages = Math.ceil(total / limit);
     </div>
   </section>
 
-  {(q || location || source) && (
+  {(q || location || source || yearMin !== undefined || yearMax !== undefined || language || hasIiif) && (
     <section class="max-w-6xl mx-auto px-4 py-8">
       <div class="flex items-center justify-between mb-6 gap-4">
         <div>
@@ -70,11 +82,14 @@ const totalPages = Math.ceil(total / limit);
             {total} rezultata
             {q && <> za "<em class="text-venetian">{q}</em>"</>}
             {location && <span class="text-ink/60 text-base"> · lokacija: {LOCATIONS.find(l => l.key === location)?.label ?? location}</span>}
+            {(yearMin !== undefined || yearMax !== undefined) && <span class="text-ink/60 text-base"> · {yearMin ?? '…'}–{yearMax ?? '…'}</span>}
+            {language && <span class="text-ink/60 text-base"> · jezik: {language}</span>}
+            {hasIiif && <span class="text-ink/60 text-base"> · IIIF</span>}
           </h2>
         </div>
         <details class="font-sans text-sm">
           <summary class="cursor-pointer hover:text-venetian">Filteri</summary>
-          <form method="get" class="mt-3 p-4 bg-white/60 border border-gold/40 rounded-sm flex flex-col gap-3 min-w-[280px]">
+          <form method="get" class="mt-3 p-4 bg-white/60 border border-gold/40 rounded-sm flex flex-col gap-3 min-w-[300px]">
             <input type="hidden" name="q" value={q} />
             <label class="flex flex-col gap-1">
               <span>Lokacija</span>
@@ -89,6 +104,27 @@ const totalPages = Math.ceil(total / limit);
                 <option value="">— svi —</option>
                 {Object.entries(SOURCE_LABELS).map(([k, v]) => <option value={k} selected={source === k}>{v}</option>)}
               </select>
+            </label>
+            <div class="flex gap-2">
+              <label class="flex flex-col gap-1 flex-1">
+                <span>Od godine</span>
+                <input type="number" name="yearMin" value={yearMin ?? ''} placeholder="-300" class="px-2 py-1 border border-gold/40 bg-white rounded-sm w-full" />
+              </label>
+              <label class="flex flex-col gap-1 flex-1">
+                <span>Do godine</span>
+                <input type="number" name="yearMax" value={yearMax ?? ''} placeholder="2000" class="px-2 py-1 border border-gold/40 bg-white rounded-sm w-full" />
+              </label>
+            </div>
+            <label class="flex flex-col gap-1">
+              <span>Jezik</span>
+              <select name="language" class="px-2 py-1 border border-gold/40 bg-white rounded-sm">
+                <option value="">— svi —</option>
+                {COMMON_LANGUAGES.map((l) => <option value={l.value} selected={language === l.value}>{l.label}</option>)}
+              </select>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="hasIiif" value="1" checked={hasIiif} class="accent-venetian" />
+              <span>Samo sa IIIF zoom-om</span>
             </label>
             <button type="submit" class="px-4 py-2 bg-venetian text-parchment rounded-sm">Primijeni</button>
           </form>
