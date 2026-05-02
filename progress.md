@@ -110,3 +110,61 @@ Nothing skipped.
 4. **Citation section** in `[id].astro`: if `navigator.clipboard` is unavailable (HTTP context or old browser), the copy button will silently fail. Consider adding a fallback (`document.execCommand('copy')`) if this matters.
 
 5. All builds passed `npm run build` cleanly.
+
+---
+
+## Agent #2 (04:30–08:00 UTC)
+
+### ✅ Completed
+
+**A1 — Connectors (+2)**
+- **`search_hathitrust`** (fix): replaced empty stub with full Blacklight/Solr implementation. Tries JSON `response.docs` parse first, falls back to HTML title/id regex. Source already in CONNECTORS; added to SOURCE_LABELS.
+- **`search_anno`** (new): ÖNB ANNO Austrian newspapers 1700s–1960s. Primary endpoint: SRU XML at `https://anno.onb.ac.at/anno-suche/sru` (Dublin Core). Fallback: `cgi-content/anno-suche?format=json`. Both endpoints 403'd in sandbox — untested live, same caveat as T2. Added to CONNECTORS + SOURCE_LABELS.
+- Commit: `69aa110`
+
+**A3 — JSON export endpoint**
+- New `/api/export.json` file mirrors `/api/export.csv` exactly (same query params: collection, q, location, source). Returns JSON array with `Content-Disposition` for download.
+- "Export JSON" link added to `/zbirke/[slug].astro` next to existing CSV link.
+- Commit: `74c9ba9`
+
+**A4 — Advanced search filters**
+- `searchResults()` in `supabase.ts`: added `language` (ilike match) and `hasIiif` (not-null `url_iiif`) params. Also fixed latent bug: `if (yearMin)` → `if (yearMin !== undefined)` so year 0 is not skipped.
+- `index.astro`: new filter fields — Od/Do godine (year range inputs), Jezik dropdown (7 common languages), "Samo sa IIIF zoom-om" checkbox.
+- Commit: `32f3a33`
+
+**A2 — Stats dashboard**
+- New `/stats` page with pure CSS/HTML bar charts:
+  - Total records + source breakdown (clickable bars → `/?source=X`)
+  - Century distribution, log-scaled, era-color-coded (clickable → year range search)
+  - Top-10 locations bar chart
+  - Coverage gaps section (sources with <30 records)
+  - Recent harvest growth (records added last 7 days via `fetched_at`)
+- Nav link "Statistika" added after "Vremenska osa" in Layout.astro.
+- Commit: `4b98d4e`
+
+**A5 — Bug sweep**
+- Verified all 20 source keys in `CONNECTORS` match `SOURCE_LABELS` ✓
+- Verified all nav links in `Layout.astro` point to existing page files ✓
+- `LOCATIONS` in `supabase.ts` confirmed intentionally wider than `regional-vocab.json` primary_locations (vocab is for query expansion, LOCATIONS is for UI filter) ✓
+- `yearMin`/`yearMax` falsy-zero bug fixed in A4 ✓
+- Final `npm run build`: clean, no TypeScript errors ✓
+
+---
+
+### ⚠️ Blocked / Notes
+
+- **ANNO SRU** and **HathiTrust Solr**: both 403 in sandbox; untested live. Check SUPABASE_HARVEST_LOG after next cron. If ANNO SRU returns HTTP 403 in production too, try `https://anno.onb.ac.at/anno-suche/#exact=TERM` (SPA URL, no API) — may need scraping approach.
+
+---
+
+### ⏭️ Skipped
+
+Nothing skipped.
+
+---
+
+### Summary
+
+- Total commits this shift: **4** (69aa110, 74c9ba9, 32f3a33, 4b98d4e)
+- Time of last commit: **2026-05-02 ~04:38 UTC**
+- All tasks A1–A5 complete; A6 (this report) is the final commit.
