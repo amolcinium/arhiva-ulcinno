@@ -47,6 +47,16 @@ const miradorUrl = hasIiif ? `https://projectmirador.org/embed/?iiif-content=${e
 const citeBibtex = toBibtex(item);
 const citeApa = toApa(item);
 const citeChicago = toChicago(item);
+
+const TOPIC_LABELS: Record<string, string> = {
+  trade: '🪙 Trgovina',
+  military: '⚔️ Vojska',
+  religious: '⛪ Religija',
+  cartographic: '🗺 Kartografija',
+  civil: '⚖️ Civilno',
+  diplomatic: '🤝 Diplomatija',
+  demographic: '👥 Stanovništvo',
+};
 ---
 <Layout title={`${item.title.slice(0, 80)} — Arhiva Ulcinj`} description={item.snippet ?? `${item.title} · izvor: ${sourceLabel}`}>
   <article class="max-w-5xl mx-auto px-4 py-8">
@@ -97,15 +107,7 @@ const citeChicago = toChicago(item);
               const m = (item.metadata as any).mentions;
               const sourceId = item.source_id;
               const isIA = item.source === 'internet_archive' && sourceId;
-              const topicLabels: Record<string, string> = {
-                trade: '🪙 Trgovina',
-                military: '⚔️ Vojska',
-                religious: '⛪ Religija',
-                cartographic: '🗺 Kartografija',
-                civil: '⚖️ Civilno',
-                diplomatic: '🤝 Diplomatija',
-                demographic: '👥 Stanovništvo',
-              };
+              const topicLabels = TOPIC_LABELS;
               return (
                 <>
                   <div class="text-base mb-3">
