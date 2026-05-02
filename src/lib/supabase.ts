@@ -46,6 +46,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   bsb: 'Bayerische Staatsbibliothek (München)',
   slub: 'SLUB Dresden',
   manus: 'Manus Online (ICCU, talijanski rukopisi)',
+  hathitrust: 'HathiTrust Digital Library',
+  anno: 'ÖNB ANNO (austrijske novine)',
 };
 
 export const LOCATIONS = [

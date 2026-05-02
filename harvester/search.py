@@ -432,24 +432,177 @@ async def search_openlibrary(session, query: str, limit: int = 20) -> list[Recor
 # ---------- connector: HathiTrust (US academic library) ----------
 
 async def search_hathitrust(session, query: str, limit: int = 15) -> list[Record]:
-    """HathiTrust — massive US academic digital library. Bibliographic API for catalog records."""
-    # HathiTrust does not have a great free-text search; use OCLC lookup via title
-    # We use their proxied search via babel.hathitrust.org full-text but JSON often blocked
-    # Alternative: search via Internet Archive (which mirrors HathiTrust) is already covered
-    # For now: use bibliographic API with author/title queries
+    """HathiTrust Digital Library — 17M+ volumes. Blacklight/Solr catalog search."""
     terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:3]
     out: list[Record] = []
     for term in terms:
-        # HathiTrust public search via Solr endpoint
         url = "https://catalog.hathitrust.org/Search/Home"
-        params = {"lookfor": term, "type": "all", "format": "json"}
+        params = {"lookfor": term, "type": "all", "limit": min(limit, 20), "format": "json"}
         text = await fetch_text(session, url, params)
         if not text:
             continue
-        # The HTML endpoint won't return JSON; instead try bib metadata endpoint
-        # Skip — yield was minimal in probe
-        break
-    return out  # placeholder; real HathiTrust integration requires their proper API key for searches
+        try:
+            data = json.loads(text)
+            docs = data.get("response", {}).get("docs", [])
+            for doc in docs[:limit]:
+                title = (doc.get("title") or "").strip()
+                if not title:
+                    continue
+                ht_id = doc.get("id") or ""
+                pub_date_raw = doc.get("publishDate") or doc.get("publishDateSort") or ""
+                if isinstance(pub_date_raw, list):
+                    pub_date_raw = pub_date_raw[0] if pub_date_raw else ""
+                pub_date = str(pub_date_raw)
+                ymin = None
+                m = re.search(r'\b(1[0-9]\d{2}|20\d{2})\b', pub_date)
+                if m:
+                    ymin = int(m.group(1))
+                authors_raw = doc.get("author") or doc.get("author_top") or ""
+                if isinstance(authors_raw, list):
+                    authors_raw = authors_raw[0] if authors_raw else ""
+                author = str(authors_raw)[:200]
+                topics = doc.get("topic") or doc.get("subject") or []
+                snippet = ", ".join(topics[:4])[:500] if isinstance(topics, list) else str(topics)[:500]
+                lang_raw = doc.get("language") or []
+                language = (lang_raw[0] if isinstance(lang_raw, list) else str(lang_raw))[:30]
+                ht_url = (
+                    f"https://catalog.hathitrust.org/Record/{ht_id}"
+                    if ht_id
+                    else f"https://catalog.hathitrust.org/Search/Home?lookfor={quote_plus(term)}"
+                )
+                out.append(Record(
+                    source="hathitrust",
+                    source_id=ht_id or title[:80],
+                    title=title[:300],
+                    author=author,
+                    date_text=pub_date[:50],
+                    date_year_min=ymin,
+                    date_year_max=ymin,
+                    url_original=ht_url,
+                    snippet=snippet,
+                    doc_type="Book",
+                    language=language,
+                    metadata={"institution": "HathiTrust Digital Library"},
+                ))
+        except (json.JSONDecodeError, TypeError, KeyError):
+            # HTML response — parse title+id from markup
+            ids = re.findall(r'/Record/(\w{6,})', text)
+            titles = re.findall(r'<span class=["\']title["\'][^>]*>([^<]+)</span>', text)
+            for ht_id, title_raw in zip(ids[:limit], titles[:limit]):
+                title = title_raw.strip()
+                if not title:
+                    continue
+                out.append(Record(
+                    source="hathitrust",
+                    source_id=ht_id,
+                    title=title[:300],
+                    url_original=f"https://catalog.hathitrust.org/Record/{ht_id}",
+                    metadata={"institution": "HathiTrust Digital Library"},
+                ))
+        if out:
+            break
+    return out[:limit]
+
+
+# ---------- connector: ÖNB ANNO (Austrian newspapers online) ----------
+
+async def search_anno(session, query: str, limit: int = 20) -> list[Record]:
+    """ÖNB ANNO — Austrian newspapers online, 1700s-1960s. Queries SRU then JSON endpoint."""
+    terms = [t.strip().strip('"') for t in re.split(r'\s+OR\s+', query) if t.strip()][:3]
+    out: list[Record] = []
+    for term in terms:
+        # Primary: SRU XML endpoint
+        sru_url = "https://anno.onb.ac.at/anno-suche/sru"
+        sru_params = {
+            "operation": "searchRetrieve",
+            "query": f'text adj "{term}"',
+            "maximumRecords": min(limit, 20),
+            "recordSchema": "dc",
+            "version": "1.2",
+        }
+        xml_text = await fetch_text(session, sru_url, sru_params)
+        if xml_text:
+            try:
+                root = ET.fromstring(xml_text)
+                ns = {
+                    "srw": "http://www.loc.gov/zing/srw/",
+                    "dc": "http://purl.org/dc/elements/1.1/",
+                    "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
+                }
+                for rec_el in root.findall(".//srw:recordData", ns):
+                    dc = rec_el.find("oai_dc:dc", ns) or rec_el
+                    title = (dc.findtext("dc:title", namespaces=ns) or "").strip()
+                    if not title:
+                        continue
+                    date_str = (dc.findtext("dc:date", namespaces=ns) or "").strip()
+                    ymin = None
+                    m = re.search(r"\b(1[6-9]\d{2}|20\d{2})\b", date_str)
+                    if m:
+                        ymin = int(m.group(1))
+                    identifier = (dc.findtext("dc:identifier", namespaces=ns) or "").strip()
+                    publisher = (dc.findtext("dc:publisher", namespaces=ns) or "").strip()
+                    snippet = (dc.findtext("dc:description", namespaces=ns) or "")[:500]
+                    ht_url = (
+                        identifier if identifier.startswith("http")
+                        else f"https://anno.onb.ac.at/anno-suche/#exact={quote_plus(term)}"
+                    )
+                    out.append(Record(
+                        source="anno",
+                        source_id=identifier[:80] or title[:80],
+                        title=title[:300],
+                        author=publisher[:200],
+                        date_text=date_str[:50],
+                        date_year_min=ymin,
+                        date_year_max=ymin,
+                        url_original=ht_url,
+                        snippet=snippet,
+                        doc_type="Zeitungsartikel",
+                        language="de",
+                        metadata={"institution": "ÖNB ANNO"},
+                    ))
+                    if len(out) >= limit:
+                        break
+            except ET.ParseError:
+                pass
+        if out:
+            break
+        # Fallback: cgi JSON endpoint
+        cgi_url = "https://anno.onb.ac.at/cgi-content/anno-suche"
+        cgi_params = {"text": term, "format": "json", "treffer": min(limit, 20)}
+        data = await fetch_json(session, cgi_url, cgi_params)
+        if data:
+            items = data.get("treffer") or data.get("results") or []
+            if isinstance(items, list):
+                for item in items[:limit]:
+                    title = (item.get("titel") or item.get("title") or "").strip()
+                    if not title:
+                        continue
+                    date_str = str(item.get("datum") or item.get("date") or "")
+                    ymin = None
+                    m = re.search(r"\b(1[6-9]\d{2}|20\d{2})\b", date_str)
+                    if m:
+                        ymin = int(m.group(1))
+                    item_url = (
+                        item.get("url") or item.get("identifier")
+                        or f"https://anno.onb.ac.at/anno-suche/#exact={quote_plus(term)}"
+                    )
+                    out.append(Record(
+                        source="anno",
+                        source_id=str(item.get("id") or item_url)[:80],
+                        title=title[:300],
+                        author=(item.get("zeitung") or item.get("publisher") or "")[:200],
+                        date_text=date_str[:50],
+                        date_year_min=ymin,
+                        date_year_max=ymin,
+                        url_original=item_url,
+                        snippet=(item.get("snippet") or item.get("text") or "")[:500],
+                        doc_type="Zeitungsartikel",
+                        language="de",
+                        metadata={"institution": "ÖNB ANNO"},
+                    ))
+            if out:
+                break
+    return out[:limit]
 
 
 # ---------- connector: Norwegian National Library (NB.no) ----------
@@ -1096,6 +1249,8 @@ CONNECTORS = {
     "bsb": search_bsb,
     "slub": search_slub,
     "manus": search_manus,
+    "hathitrust": search_hathitrust,
+    "anno": search_anno,
 }
 
 
