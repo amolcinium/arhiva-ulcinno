@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro';
+import { env } from 'cloudflare:workers';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL;
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  const serviceKey = (locals as any)?.runtime?.env?.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  const adminToken = (locals as any)?.runtime?.env?.ADMIN_TOKEN ?? process.env.ADMIN_TOKEN;
+export const POST: APIRoute = async ({ request }) => {
+  const serviceKey = env.SUPABASE_SERVICE_KEY;
+  const adminToken = env.ADMIN_TOKEN;
 
   if (!serviceKey || !adminToken) {
     return new Response(JSON.stringify({ error: 'Service not configured' }), { status: 503 });
@@ -64,9 +65,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 };
 
 // Bulk hide endpoint: POST {token, ids: [...]}
-export const PUT: APIRoute = async ({ request, locals }) => {
-  const serviceKey = (locals as any)?.runtime?.env?.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  const adminToken = (locals as any)?.runtime?.env?.ADMIN_TOKEN ?? process.env.ADMIN_TOKEN;
+export const PUT: APIRoute = async ({ request }) => {
+  const serviceKey = env.SUPABASE_SERVICE_KEY;
+  const adminToken = env.ADMIN_TOKEN;
   if (!serviceKey || !adminToken) {
     return new Response(JSON.stringify({ error: 'Service not configured' }), { status: 503 });
   }
