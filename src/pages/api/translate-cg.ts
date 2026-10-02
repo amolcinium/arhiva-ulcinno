@@ -1,12 +1,13 @@
 import type { APIRoute } from 'astro';
+import { env } from 'cloudflare:workers';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL;
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request }) => {
   // Use service role key from CF Pages env (server-side only, never exposed)
-  const serviceKey = (locals as any)?.runtime?.env?.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  const anthropicKey = (locals as any)?.runtime?.env?.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+  const serviceKey = env.SUPABASE_SERVICE_KEY;
+  const anthropicKey = env.ANTHROPIC_API_KEY;
 
   if (!serviceKey || !anthropicKey) {
     return new Response(
